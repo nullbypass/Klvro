@@ -1,0 +1,52 @@
+services:
+  - type: web
+    name: klvro
+    runtime: node
+    plan: 0.5c-512mb
+    region: virginia
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    domains:
+      - klvro.site
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PUBLIC_URL
+        value: https://klvro.site
+      - key: DATABASE_URL
+        fromDatabase:
+          name: klvro-db
+          property: connectionString
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: DISCORD_CLIENT_ID
+        sync: false
+      - key: DISCORD_CLIENT_SECRET
+        sync: false
+      - key: DISCORD_BOT_TOKEN
+        sync: false
+      - key: DISCORD_REDIRECT_URI
+        value: https://klvro.site/auth/discord/callback
+      - key: REGISTER_COMMANDS
+        value: "true"
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_MODE
+        value: sandbox
+
+databases:
+  - name: klvro-db
+    plan: 0.1c-256mb
+    region: virginia
+    databaseName: klvro
+    user: klvro
+    postgresMajorVersion: "18"
+    ipAllowList: []
