@@ -83,6 +83,17 @@ async function api(url, options = {}) {
   return data;
 }
 
+
+function openCenteredPopup(url, name, width = 560, height = 760) {
+  const left = Math.max(0, Math.round(window.screenX + (window.outerWidth - width) / 2));
+  const top = Math.max(0, Math.round(window.screenY + (window.outerHeight - height) / 2));
+  return window.open(
+    url,
+    name,
+    `popup=yes,width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+  );
+}
+
 function App() {
   const [screen, setScreen] = useState(window.location.pathname.startsWith('/app') ? 'servers' : 'landing');
   const [publicPage, setPublicPage] = useState(publicPageFromPath(window.location.pathname));
@@ -110,12 +121,23 @@ function App() {
     if (billing === 'cancelled') setError('El pago fue cancelado.');
     if (billing === 'error') setError('No se pudo completar el pago.');
 
+    const onPopupMessage = (event) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type === 'klvro-auth-success') {
+        loadMe();
+      }
+    };
+
     const onPop = () => {
       setScreen(window.location.pathname.startsWith('/app') ? 'servers' : 'landing');
       setPublicPage(publicPageFromPath(window.location.pathname));
     };
+    window.addEventListener('message', onPopupMessage);
     window.addEventListener('popstate', onPop);
-    return () => window.removeEventListener('popstate', onPop);
+    return () => {
+      window.removeEventListener('message', onPopupMessage);
+      window.removeEventListener('popstate', onPop);
+    };
   }, []);
 
   useEffect(() => {
@@ -139,6 +161,13 @@ function App() {
     try {
       const data = await api('/api/me');
       setMe({ loading: false, ...data });
+
+      if (data.authenticated && window.opener && window.opener !== window) {
+        window.opener.postMessage({ type: 'klvro-auth-success' }, window.location.origin);
+        setTimeout(() => window.close(), 120);
+        return;
+      }
+
       if (window.location.pathname.startsWith('/app') && !data.authenticated) {
         window.location.href = '/auth/discord';
       }
@@ -158,9 +187,58 @@ function App() {
     }
   }
 
+  function openLoginPopup() {
+    const popup = openCenteredPopup('/auth/discord', 'klvro-discord-login', 540, 760);
+    if (!popup) {
+      setError('El navegador bloqueó la ventana de Discord. Permite ventanas emergentes para klvro.onrender.com.');
+      return;
+    }
+    popup.focus();
+  }
+
+  function openInvitePopup(serverId = '') {
+    const suffix = serverId ? `?guildId=${encodeURIComponent(serverId)}` : '';
+    const popup = openCenteredPopup(`/api/discord/invite${suffix}`, 'klvro-discord-invite', 560, 780);
+    if (!popup) {
+      setError('El navegador bloqueó la ventana de Discord. Permite ventanas emergentes para klvro.onrender.com.');
+      return;
+    }
+    popup.focus();
+
+    if (!me.authenticated) return;
+
+    const installedBefore = new Set(guilds.filter((guild) => guild.botAdded).map((guild) => guild.id));
+    let checks = 0;
+    const watcher = window.setInterval(async () => {
+      checks += 1;
+      try {
+        const data = await api('/api/guilds');
+        const nextGuilds = data.guilds || [];
+        setGuilds(nextGuilds);
+
+        const installed = serverId
+          ? nextGuilds.find((guild) => guild.id === serverId && guild.botAdded)
+          : nextGuilds.find((guild) => guild.botAdded && !installedBefore.has(guild.id));
+
+        if (installed) {
+          window.clearInterval(watcher);
+          try { popup.close(); } catch {}
+          return;
+        }
+      } catch {
+        // Se vuelve a intentar mientras la ventana siga abierta.
+      }
+
+      if (popup.closed || checks >= 80) {
+        window.clearInterval(watcher);
+        loadGuilds();
+      }
+    }, 1500);
+  }
+
   function goApp() {
     if (!me.authenticated) {
-      window.location.href = '/auth/discord';
+      openLoginPopup();
       return;
     }
     history.pushState({}, '', '/app');
@@ -185,7 +263,7 @@ function App() {
 
   async function openServer(server) {
     if (!server.botAdded) {
-      window.location.href = `/api/discord/invite?guildId=${encodeURIComponent(server.id)}`;
+      openInvitePopup(server.id);
       return;
     }
 
@@ -241,10 +319,10 @@ function App() {
           onHome={goHome}
           onNavigate={goPublic}
           onManage={goApp}
-          onAdd={() => { window.location.href = '/api/discord/invite'; }}
-          onLogin={() => { window.location.href = '/auth/discord'; }}
+          onAdd={() => openInvitePopup()}
+          onLogin={openLoginPopup}
           onPlan={(plan) => {
-            if (!me.authenticated) window.location.href = '/auth/discord';
+            if (!me.authenticated) openLoginPopup();
             else setBillingPlan(plan);
           }}
           error={error}
@@ -445,7 +523,6 @@ function Landing({ page, me, onHome, onNavigate, onManage, onAdd, onLogin, onPla
         </button>
         <nav className="landing-links">
           <button onClick={onManage}>Panel</button>
-          <button onClick={onAdd}>Invitar</button>
           <button className={page === 'server' ? 'active' : ''} onClick={() => onNavigate('server')}>Servidor</button>
           <button className={page === 'status' ? 'active' : ''} onClick={() => onNavigate('status')}>Estado</button>
           <button className={page === 'commands' ? 'active' : ''} onClick={() => onNavigate('commands')}>Comandos</button>
