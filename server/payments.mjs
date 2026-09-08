@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import Stripe from 'stripe';
 import { grantPremium } from './db.mjs';
 import { PLANS } from './plans.mjs';
+import { sendPremiumThankYouEmail } from './mailer.mjs';
 
 export const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
@@ -20,6 +21,31 @@ export function getPlan(planId) {
     throw error;
   }
   return plan;
+}
+
+async function grantAndNotify({ userId, plan, provider, paymentId, email }) {
+  const result = await grantPremium({
+    userId,
+    plan: plan.id,
+    provider,
+    paymentId,
+    amount: plan.amount,
+    currency: plan.currency,
+    days: plan.days,
+  });
+
+  if (!result?.duplicate && email) {
+    await sendPremiumThankYouEmail({
+      to: email,
+      plan,
+      provider,
+      amount: plan.amount,
+      currency: plan.currency,
+      days: plan.days,
+    });
+  }
+
+  return result;
 }
 
 export async function createStripeCheckout({ userId, planId }) {
@@ -60,6 +86,60 @@ export async function createStripeCheckout({ userId, planId }) {
   return session.url;
 }
 
+export async function createStripePaymentIntent({ userId, planId, email, country = 'DO' }) {
+  if (!stripe) {
+    const error = new Error('Stripe todavía no está configurado.');
+    error.status = 503;
+    throw error;
+  }
+
+  const plan = getPlan(planId);
+  return stripe.paymentIntents.create({
+    amount: plan.amount,
+    currency: plan.currency,
+    automatic_payment_methods: { enabled: true },
+    receipt_email: email || undefined,
+    description: plan.description,
+    metadata: {
+      klvro_user_id: userId,
+      klvro_plan: plan.id,
+      klvro_email: email || '',
+      klvro_country: String(country || 'DO').slice(0, 2).toUpperCase(),
+    },
+  });
+}
+
+export async function finalizeStripePaymentIntent(paymentIntentId, expectedUserId = null) {
+  if (!stripe) throw new Error('Stripe no está configurado.');
+
+  const intent = await stripe.paymentIntents.retrieve(paymentIntentId);
+  if (intent.status !== 'succeeded') {
+    const error = new Error('El pago todavía no aparece como completado.');
+    error.status = 400;
+    throw error;
+  }
+
+  const userId = intent.metadata?.klvro_user_id;
+  const plan = getPlan(intent.metadata?.klvro_plan);
+  if (!userId) throw new Error('El pago no contiene un usuario de Klvro.');
+  if (expectedUserId && userId !== expectedUserId) {
+    const error = new Error('Este pago no pertenece a tu cuenta.');
+    error.status = 403;
+    throw error;
+  }
+
+  const email = intent.receipt_email || intent.metadata?.klvro_email || null;
+  const grant = await grantAndNotify({
+    userId,
+    plan,
+    provider: 'stripe',
+    paymentId: intent.id,
+    email,
+  });
+
+  return { userId, plan: plan.id, duplicate: Boolean(grant?.duplicate) };
+}
+
 export async function finalizeStripeSession(sessionId) {
   if (!stripe) throw new Error('Stripe no está configurado.');
 
@@ -75,17 +155,16 @@ export async function finalizeStripeSession(sessionId) {
   if (!userId) throw new Error('El pago no contiene un usuario de Klvro.');
 
   const paymentId = String(session.payment_intent || session.id);
-  await grantPremium({
+  const email = session.customer_details?.email || session.customer_email || null;
+  const grant = await grantAndNotify({
     userId,
-    plan: plan.id,
+    plan,
     provider: 'stripe',
     paymentId,
-    amount: plan.amount,
-    currency: plan.currency,
-    days: plan.days,
+    email,
   });
 
-  return { userId, plan: plan.id };
+  return { userId, plan: plan.id, duplicate: Boolean(grant?.duplicate) };
 }
 
 function paypalBaseUrl() {
@@ -201,15 +280,14 @@ export async function capturePayPalOrder(orderId) {
   if (!userId) throw new Error('La orden de PayPal no contiene un usuario de Klvro.');
 
   const captureId = purchaseUnit?.payments?.captures?.[0]?.id || order.id;
-  await grantPremium({
+  const email = order.payer?.email_address || null;
+  const grant = await grantAndNotify({
     userId,
-    plan: plan.id,
+    plan,
     provider: 'paypal',
     paymentId: captureId,
-    amount: plan.amount,
-    currency: plan.currency,
-    days: plan.days,
+    email,
   });
 
-  return { userId, plan: plan.id };
+  return { userId, plan: plan.id, duplicate: Boolean(grant?.duplicate) };
 }
