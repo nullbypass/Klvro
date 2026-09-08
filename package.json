@@ -8,10 +8,10 @@
   },
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "node scripts/ui-patch.mjs && node scripts/ticket-feature-patch.mjs && node scripts/ticket-ui-hotfix.mjs && node scripts/mobile-session-fix.mjs && node scripts/domain-docs-language.mjs && node scripts/docs-route-hotfix.mjs && node scripts/embedded-payment-ui-patch.mjs && node scripts/security-hardening.mjs && node scripts/admin-panel.mjs && (npm audit --omit=dev || true) && vite build",
-    "start": "node scripts/ticket-feature-patch.mjs && node scripts/mobile-session-fix.mjs && node scripts/domain-docs-language.mjs && node scripts/docs-route-hotfix.mjs && node scripts/security-hardening.mjs && node scripts/admin-panel.mjs && node server/index.mjs",
+    "build": "node scripts/ui-patch.mjs && node scripts/ticket-feature-patch.mjs && node scripts/ticket-ui-hotfix.mjs && node scripts/ticket-advanced-patch.mjs && node scripts/mobile-session-fix.mjs && node scripts/domain-docs-language.mjs && node scripts/docs-route-hotfix.mjs && node scripts/embedded-payment-ui-patch.mjs && node scripts/security-hardening.mjs && node scripts/admin-panel.mjs && (npm audit --omit=dev || true) && vite build",
+    "start": "node scripts/ticket-feature-patch.mjs && node scripts/ticket-advanced-patch.mjs && node scripts/mobile-session-fix.mjs && node scripts/domain-docs-language.mjs && node scripts/docs-route-hotfix.mjs && node scripts/security-hardening.mjs && node scripts/admin-panel.mjs && node server/index.mjs",
     "register-commands": "node server/register-commands.mjs",
-    "dev:server": "node scripts/security-hardening.mjs && node scripts/admin-panel.mjs && node --watch server/index.mjs",
+    "dev:server": "node scripts/ticket-feature-patch.mjs && node scripts/ticket-advanced-patch.mjs && node scripts/security-hardening.mjs && node scripts/admin-panel.mjs && node --watch server/index.mjs",
     "security:audit": "npm audit --omit=dev --audit-level=moderate"
   },
   "dependencies": {
