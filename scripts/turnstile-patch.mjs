@@ -36,13 +36,59 @@ if (!index.includes(marker)) {
   const block = `
 ${marker}
 const TURNSTILE_WINDOW_MS = 1000 * 60 * 60 * 12;
+const TURNSTILE_COOKIE = 'klvro.cf';
 
 function turnstileConfigured() {
   return Boolean(process.env.TURNSTILE_SITE_KEY && process.env.TURNSTILE_SECRET_KEY);
 }
 
+function parseCookies(req) {
+  const header = String(req.headers?.cookie || '');
+  const result = {};
+  for (const part of header.split(';')) {
+    const separator = part.indexOf('=');
+    if (separator < 1) continue;
+    const key = part.slice(0, separator).trim();
+    const value = part.slice(separator + 1).trim();
+    if (!key) continue;
+    try { result[key] = decodeURIComponent(value); } catch { result[key] = value; }
+  }
+  return result;
+}
+
+function turnstileCookieSecret() {
+  return process.env.SESSION_SECRET || process.env.TURNSTILE_SECRET_KEY || '';
+}
+
+function signTurnstileValue(value) {
+  return crypto.createHmac('sha256', turnstileCookieSecret()).update(value).digest('base64url');
+}
+
+function createTurnstileCookie() {
+  const expiresAt = Date.now() + TURNSTILE_WINDOW_MS;
+  const nonce = crypto.randomBytes(16).toString('base64url');
+  const body = \`v1.\${expiresAt}.\${nonce}\`;
+  return \`\${body}.\${signTurnstileValue(body)}\`;
+}
+
+function validTurnstileCookie(req) {
+  const token = parseCookies(req)[TURNSTILE_COOKIE];
+  if (!token || token.length > 512) return false;
+  const parts = token.split('.');
+  if (parts.length !== 4 || parts[0] !== 'v1') return false;
+
+  const expiresAt = Number(parts[1]);
+  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now() || expiresAt > Date.now() + TURNSTILE_WINDOW_MS + 60_000) return false;
+
+  const body = parts.slice(0, 3).join('.');
+  const expected = Buffer.from(signTurnstileValue(body));
+  const received = Buffer.from(parts[3]);
+  return expected.length === received.length && crypto.timingSafeEqual(expected, received);
+}
+
 function turnstileVerified(req) {
   if (!turnstileConfigured()) return true;
+  if (validTurnstileCookie(req)) return true;
   const verifiedAt = Number(req.session?.turnstileVerifiedAt || 0);
   return verifiedAt > 0 && Date.now() - verifiedAt < TURNSTILE_WINDOW_MS;
 }
@@ -116,6 +162,15 @@ app.post('/api/turnstile/verify', turnstileLimiter, async (req, res) => {
     }
 
     req.session.turnstileVerifiedAt = Date.now();
+    res.cookie(TURNSTILE_COOKIE, createTurnstileCookie(), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: TURNSTILE_WINDOW_MS,
+      path: '/',
+      priority: 'high',
+    });
+
     req.session.save((error) => {
       if (error) return res.status(500).json({ error: 'No se pudo guardar la verificación.' });
       return res.json({ verified: true, expiresIn: TURNSTILE_WINDOW_MS });
