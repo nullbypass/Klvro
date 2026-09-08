@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "node scripts/ui-patch.mjs && node scripts/ticket-feature-patch.mjs && vite build",
+    "build": "node scripts/ui-patch.mjs && node scripts/ticket-feature-patch.mjs && node scripts/ticket-ui-hotfix.mjs && vite build",
     "start": "node scripts/ticket-feature-patch.mjs && node server/index.mjs",
     "register-commands": "node server/register-commands.mjs",
     "dev:server": "node --watch server/index.mjs"
