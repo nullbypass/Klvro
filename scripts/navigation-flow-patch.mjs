@@ -79,7 +79,13 @@ main = main.replace(
 
 main = main.replaceAll('Volver al dashboard', 'Dashboard');
 
+// En la portada, el botón secundario abre el servidor de soporte usando VITE_SUPPORT_URL.
+main = main.replace(
+  '<button className="secondary-hero-button" onClick={onAdd}><DiscordIcon className="brand-discord-icon" /> Añadir a Discord</button>',
+  '<button className="secondary-hero-button" onClick={() => SUPPORT_URL && window.open(SUPPORT_URL, \'_blank\', \'noopener,noreferrer\')}><LifeBuoy size={18} /> Soporte</button>'
+);
+
 fs.writeFileSync(mainPath, main);
 fs.writeFileSync(gatePath, gate);
 fs.writeFileSync(indexPath, index);
-console.log('[Klvro] Flujo de verificación/login ajustado al home.');
+console.log('[Klvro] Flujo de verificación/login ajustado al home + botón de soporte.');
