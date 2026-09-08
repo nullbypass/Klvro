@@ -2,9 +2,18 @@ import pg from 'pg';
 
 const { Pool } = pg;
 
+const databaseUrl = process.env.DATABASE_URL;
+const isLocalDatabase = databaseUrl?.includes('localhost') || databaseUrl?.includes('127.0.0.1');
+
 export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
+  connectionString: databaseUrl,
+  // Supabase exige SSL. En desarrollo local se deja sin SSL.
+  ssl: databaseUrl && !isLocalDatabase ? { rejectUnauthorized: false } : undefined,
+  // Mantener un pool pequeño evita consumir conexiones innecesarias del plan gratuito.
+  max: Math.max(1, Math.min(10, Number(process.env.PGPOOL_MAX) || 5)),
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 10_000,
+  allowExitOnIdle: false,
 });
 
 const DEFAULT_SETTINGS = {
