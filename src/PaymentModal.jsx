@@ -48,7 +48,7 @@ function money(value, currency, locale = 'es-DO') {
   }
 }
 
-function CardForm({ plan, quote, email, onSuccess }) {
+function CardForm({ quote, onSuccess }) {
   const stripe = useStripe();
   const elements = useElements();
   const [loading, setLoading] = useState(false);
@@ -65,7 +65,6 @@ function CardForm({ plan, quote, email, onSuccess }) {
         elements,
         confirmParams: {
           return_url: `${window.location.origin}/billing/stripe/embedded-success`,
-          receipt_email: email,
         },
         redirect: 'if_required',
       });
@@ -106,6 +105,9 @@ function CardForm({ plan, quote, email, onSuccess }) {
 }
 
 export default function PaymentModal({ plan, onClose }) {
+  const planId = typeof plan === 'string' ? plan : plan?.id;
+  const planLabel = PLAN_LABELS[planId] || (typeof plan === 'object' ? plan?.name : '') || 'Klvro Premium';
+
   const [country, setCountry] = useState('DO');
   const [email, setEmail] = useState('');
   const [quote, setQuote] = useState(null);
@@ -121,17 +123,36 @@ export default function PaymentModal({ plan, onClose }) {
   );
 
   useEffect(() => {
+    if (mode === 'methods' || !planId) {
+      setQuote(null);
+      return undefined;
+    }
+
     let alive = true;
     setQuote(null);
-    api(`/api/billing/quote?plan=${encodeURIComponent(plan)}&country=${encodeURIComponent(country)}`)
+    api(`/api/billing/quote?plan=${encodeURIComponent(planId)}&country=${encodeURIComponent(country)}`)
       .then((data) => { if (alive) setQuote(data); })
-      .catch(() => { if (alive) setQuote(null); });
+      .catch((err) => { if (alive) setError(err.message); });
     return () => { alive = false; };
-  }, [plan, country]);
+  }, [planId, country, mode]);
 
   const countryInfo = COUNTRIES.find((item) => item.code === country) || COUNTRIES[0];
 
+  function openCardDetails() {
+    if (!planId) {
+      setError('No se pudo identificar el plan seleccionado.');
+      return;
+    }
+    setError('');
+    setIntent(null);
+    setMode('details');
+  }
+
   async function startCard() {
+    if (!planId) {
+      setError('No se pudo identificar el plan seleccionado.');
+      return;
+    }
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
       setError('Escribe un correo válido para enviarte la confirmación del pago.');
       return;
@@ -142,7 +163,7 @@ export default function PaymentModal({ plan, onClose }) {
     try {
       const data = await api('/api/billing/stripe/intent', {
         method: 'POST',
-        body: JSON.stringify({ plan, country, email: email.trim() }),
+        body: JSON.stringify({ plan: planId, country, email: email.trim() }),
       });
       setIntent(data);
       if (data.quote) setQuote(data.quote);
@@ -155,12 +176,17 @@ export default function PaymentModal({ plan, onClose }) {
   }
 
   async function payPal() {
+    if (!planId) {
+      setError('No se pudo identificar el plan seleccionado.');
+      return;
+    }
+
     setLoading('paypal');
     setError('');
     try {
       const data = await api('/api/billing/paypal', {
         method: 'POST',
-        body: JSON.stringify({ plan }),
+        body: JSON.stringify({ plan: planId }),
       });
       window.location.href = data.url;
     } catch (err) {
@@ -208,59 +234,81 @@ export default function PaymentModal({ plan, onClose }) {
               <div className="klvro-pay-icon"><CreditCard size={21} /></div>
               <div>
                 <span>Pago seguro</span>
-                <h2>{PLAN_LABELS[plan] || 'Klvro Premium'}</h2>
+                <h2>{mode === 'methods' ? planLabel : 'Pago con tarjeta'}</h2>
               </div>
             </div>
-
-            <div className="klvro-pay-total">
-              <div>
-                <span>Total a cobrar</span>
-                <strong>{quote ? money(quote.usd, 'USD', 'en-US') : 'Cargando…'}</strong>
-              </div>
-              <div className="klvro-pay-local">
-                <span>Aprox. en {countryInfo.currency}</span>
-                <strong>{quote?.local !== null && quote?.local !== undefined ? money(quote.local, quote.currency || countryInfo.currency) : '—'}</strong>
-              </div>
-            </div>
-
-            <label className="klvro-pay-field">
-              <span>País</span>
-              <select value={country} onChange={(event) => { setCountry(event.target.value); setIntent(null); if (mode === 'card') setMode('methods'); }}>
-                {COUNTRIES.map((item) => <option value={item.code} key={item.code}>{item.name} · {item.currency}</option>)}
-              </select>
-            </label>
-
-            <label className="klvro-pay-field">
-              <span>Correo para la confirmación</span>
-              <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="tu@correo.com" autoComplete="email" disabled={mode === 'card'} />
-            </label>
-
-            {quote?.warning && <div className="klvro-pay-note">{quote.warning} El cobro seguirá siendo en USD.</div>}
-            {!quote?.warning && quote?.currency && quote.currency !== 'USD' && (
-              <div className="klvro-pay-note">La conversión es informativa. Tu banco puede aplicar otra tasa o cargos. Klvro cobrará exactamente {money(quote.usd, 'USD', 'en-US')}.</div>
-            )}
-
-            {error && <div className="klvro-pay-error">{error}</div>}
 
             {mode === 'methods' && (
-              <div className="klvro-pay-methods">
-                <button className="klvro-pay-paypal" type="button" onClick={payPal} disabled={Boolean(loading)}>
-                  {loading === 'paypal' ? <LoaderCircle size={18} className="spin" /> : null}
-                  <b>PayPal</b><span>Continuar con PayPal</span>
-                </button>
-                <button className="klvro-pay-card" type="button" onClick={startCard} disabled={Boolean(loading) || !quote}>
-                  {loading === 'stripe' ? <LoaderCircle size={18} className="spin" /> : <CreditCard size={18} />}
-                  <span>{loading === 'stripe' ? 'Preparando pago…' : 'Pagar con tarjeta'}</span>
-                </button>
-              </div>
+              <>
+                {error && <div className="klvro-pay-error">{error}</div>}
+                <div className="klvro-pay-methods klvro-pay-methods-simple">
+                  <button className="klvro-pay-paypal klvro-pay-paypal-logo" type="button" onClick={payPal} disabled={Boolean(loading)} aria-label="Pagar con PayPal" title="Pagar con PayPal">
+                    {loading === 'paypal' ? <LoaderCircle size={22} className="spin" /> : <img src="/paypal-mark.svg" alt="PayPal" />}
+                  </button>
+                  <button className="klvro-pay-card" type="button" onClick={openCardDetails} disabled={Boolean(loading)}>
+                    <CreditCard size={18} />
+                    <span>Pagar con tarjeta</span>
+                  </button>
+                </div>
+              </>
             )}
 
-            {mode === 'card' && intent?.clientSecret && stripePromise && elementsOptions && (
+            {mode !== 'methods' && (
               <>
-                <button type="button" className="klvro-pay-back" onClick={() => { setMode('methods'); setIntent(null); }}>← Cambiar método</button>
-                <Elements stripe={stripePromise} options={elementsOptions}>
-                  <CardForm plan={plan} quote={quote} email={email.trim()} onSuccess={paymentSuccess} />
-                </Elements>
+                <div className="klvro-pay-total">
+                  <div>
+                    <span>Total a cobrar</span>
+                    <strong>{quote ? money(quote.usd, 'USD', 'en-US') : 'Cargando…'}</strong>
+                  </div>
+                  <div className="klvro-pay-local">
+                    <span>Aprox. en {countryInfo.currency}</span>
+                    <strong>{quote?.local !== null && quote?.local !== undefined ? money(quote.local, quote.currency || countryInfo.currency) : '—'}</strong>
+                  </div>
+                </div>
+
+                {mode === 'details' && (
+                  <>
+                    <label className="klvro-pay-field">
+                      <span>País</span>
+                      <select value={country} onChange={(event) => { setCountry(event.target.value); setIntent(null); }}>
+                        {COUNTRIES.map((item) => <option value={item.code} key={item.code}>{item.name} · {item.currency}</option>)}
+                      </select>
+                    </label>
+
+                    <label className="klvro-pay-field">
+                      <span>Correo para la confirmación</span>
+                      <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="tu@correo.com" autoComplete="email" />
+                    </label>
+
+                    {quote?.warning && <div className="klvro-pay-note">{quote.warning} El cobro seguirá siendo en USD.</div>}
+                    {!quote?.warning && quote?.currency && quote.currency !== 'USD' && (
+                      <div className="klvro-pay-note">La conversión es informativa. Tu banco puede aplicar otra tasa o cargos. Klvro cobrará exactamente {money(quote.usd, 'USD', 'en-US')}.</div>
+                    )}
+
+                    {error && <div className="klvro-pay-error">{error}</div>}
+
+                    <div className="klvro-pay-details-actions">
+                      <button type="button" className="klvro-pay-back klvro-pay-back-button" onClick={() => { setMode('methods'); setIntent(null); setError(''); }}>← Métodos de pago</button>
+                      <button className="klvro-pay-primary" type="button" onClick={startCard} disabled={Boolean(loading) || !quote}>
+                        {loading === 'stripe' ? <LoaderCircle size={18} className="spin" /> : <CreditCard size={17} />}
+                        {loading === 'stripe' ? 'Preparando…' : 'Continuar con tarjeta'}
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {mode === 'card' && intent?.clientSecret && stripePromise && elementsOptions && (
+                  <>
+                    <div className="klvro-pay-card-summary">
+                      <span>{countryInfo.name}</span>
+                      <span>{email.trim()}</span>
+                    </div>
+                    <button type="button" className="klvro-pay-back" onClick={() => { setMode('details'); setIntent(null); setError(''); }}>← Editar datos</button>
+                    <Elements stripe={stripePromise} options={elementsOptions}>
+                      <CardForm quote={quote} onSuccess={paymentSuccess} />
+                    </Elements>
+                  </>
+                )}
               </>
             )}
           </>
