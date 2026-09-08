@@ -121,10 +121,15 @@ function App() {
     if (billing === 'cancelled') setError('El pago fue cancelado.');
     if (billing === 'error') setError('No se pudo completar el pago.');
 
-    const onPopupMessage = (event) => {
+    const onPopupMessage = async (event) => {
       if (event.origin !== window.location.origin) return;
       if (event.data?.type === 'klvro-auth-success') {
-        loadMe();
+        const data = await loadMe();
+        if (data?.authenticated) {
+          history.pushState({}, '', '/app');
+          setScreen('servers');
+          loadGuilds();
+        }
       }
     };
 
@@ -162,18 +167,14 @@ function App() {
       const data = await api('/api/me');
       setMe({ loading: false, ...data });
 
-      if (data.authenticated && window.opener && window.opener !== window) {
-        window.opener.postMessage({ type: 'klvro-auth-success' }, window.location.origin);
-        setTimeout(() => window.close(), 120);
-        return;
-      }
-
       if (window.location.pathname.startsWith('/app') && !data.authenticated) {
         window.location.href = '/auth/discord';
       }
+      return data;
     } catch (err) {
       setMe({ loading: false, authenticated: false, user: null, premium: null });
       setError(err.message);
+      return null;
     }
   }
 
@@ -187,28 +188,75 @@ function App() {
     }
   }
 
-  function openLoginPopup() {
+  function openLoginPopup(afterLogin = null) {
     const popup = openCenteredPopup('/auth/discord', 'klvro-discord-login', 540, 760);
     if (!popup) {
-      setError('El navegador bloqueó la ventana de Discord. Permite ventanas emergentes para klvro.onrender.com.');
+      setError('El navegador bloqueó la ventana de Discord. Permite ventanas emergentes para este sitio.');
       return;
     }
     popup.focus();
+
+    let checks = 0;
+    const watcher = window.setInterval(async () => {
+      checks += 1;
+      try {
+        const data = await api('/api/me');
+        if (data?.authenticated) {
+          window.clearInterval(watcher);
+          setMe({ loading: false, ...data });
+          try { popup.close(); } catch {}
+
+          if (typeof afterLogin === 'function') {
+            afterLogin();
+          } else {
+            history.pushState({}, '', '/app');
+            setScreen('servers');
+            loadGuilds();
+          }
+          return;
+        }
+      } catch {
+        // El popup sigue abierto mientras Discord termina el login.
+      }
+
+      if (popup.closed || checks >= 180) {
+        window.clearInterval(watcher);
+        const data = await loadMe();
+        if (data?.authenticated && typeof afterLogin !== 'function') {
+          history.pushState({}, '', '/app');
+          setScreen('servers');
+          loadGuilds();
+        }
+      }
+    }, 700);
   }
 
   function openInvitePopup(serverId = '') {
+    if (!me.authenticated) {
+      openLoginPopup(() => launchInvitePopup(serverId));
+      return;
+    }
+    launchInvitePopup(serverId);
+  }
+
+  function launchInvitePopup(serverId = '') {
     const suffix = serverId ? `?guildId=${encodeURIComponent(serverId)}` : '';
     const popup = openCenteredPopup(`/api/discord/invite${suffix}`, 'klvro-discord-invite', 560, 780);
     if (!popup) {
-      setError('El navegador bloqueó la ventana de Discord. Permite ventanas emergentes para klvro.onrender.com.');
+      setError('El navegador bloqueó la ventana de Discord. Permite ventanas emergentes para este sitio.');
       return;
     }
     popup.focus();
 
-    if (!me.authenticated) return;
-
-    const installedBefore = new Set(guilds.filter((guild) => guild.botAdded).map((guild) => guild.id));
     let checks = 0;
+    let installedBefore = new Set(guilds.filter((guild) => guild.botAdded).map((guild) => guild.id));
+
+    // Si se abrió desde la web pública, toma una foto real de los servidores antes de esperar la instalación.
+    api('/api/guilds').then((data) => {
+      installedBefore = new Set((data.guilds || []).filter((guild) => guild.botAdded).map((guild) => guild.id));
+      setGuilds(data.guilds || []);
+    }).catch(() => null);
+
     const watcher = window.setInterval(async () => {
       checks += 1;
       try {
@@ -223,17 +271,20 @@ function App() {
         if (installed) {
           window.clearInterval(watcher);
           try { popup.close(); } catch {}
+          history.pushState({}, '', '/app');
+          setScreen('servers');
+          await openServer(installed);
           return;
         }
       } catch {
-        // Se vuelve a intentar mientras la ventana siga abierta.
+        // Se vuelve a intentar mientras Discord termina de añadir el bot.
       }
 
-      if (popup.closed || checks >= 80) {
+      if (popup.closed || checks >= 120) {
         window.clearInterval(watcher);
         loadGuilds();
       }
-    }, 1500);
+    }, 1000);
   }
 
   function goApp() {
