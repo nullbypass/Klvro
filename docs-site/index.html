@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Documentación oficial de Klvro" />
+  <title>Klvro Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark">K</div>
+        <div>
+          <strong>Klvro</strong>
+          <span>Documentación</span>
+        </div>
+      </div>
+
+      <div class="search-wrap">
+        <input id="search" type="search" placeholder="Buscar en la documentación..." autocomplete="off" />
+      </div>
+
+      <nav class="nav" id="nav">
+        <a href="#inicio" class="active">Inicio</a>
+        <a href="#primeros-pasos">Primeros pasos</a>
+        <a href="#panel">Panel web</a>
+        <a href="#tickets">Tickets</a>
+        <a href="#moderacion">Moderación</a>
+        <a href="#antiraid">Anti-Raid</a>
+        <a href="#administracion">Administración</a>
+        <a href="#autoroles">Autoroles</a>
+        <a href="#registros">Registros</a>
+        <a href="#comandos">Comandos</a>
+        <a href="#premium">Premium</a>
+        <a href="#permisos">Permisos</a>
+        <a href="#problemas">Problemas comunes</a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <a href="https://klvro.site">Volver a Klvro</a>
+      </div>
+    </aside>
+
+    <main class="content">
+      <header class="mobile-header">
+        <button id="menuButton" aria-label="Abrir menú">☰</button>
+        <strong>Klvro Docs</strong>
+      </header>
+
+      <article>
+        <section id="inicio" data-search="inicio documentación klvro bot discord">
+          <p class="eyebrow">KLVRO DOCS</p>
+          <h1>Documentación de Klvro</h1>
+          <p class="lead">Guía para instalar, configurar y administrar Klvro desde Discord y desde el panel web.</p>
+          <div class="cards">
+            <a class="card" href="#primeros-pasos"><strong>Primeros pasos</strong><span>Añade el bot y entra al panel.</span></a>
+            <a class="card" href="#tickets"><strong>Tickets</strong><span>Configura soporte y paneles.</span></a>
+            <a class="card" href="#antiraid"><strong>Anti-Raid</strong><span>Protege el servidor de acciones masivas.</span></a>
+          </div>
+        </section>
+
+        <section id="primeros-pasos" data-search="primeros pasos añadir bot login discord servidor instalar">
+          <h2>Primeros pasos</h2>
+          <p>Entra a Klvro con tu cuenta de Discord, elige un servidor donde tengas permisos de administración y añade el bot. Una vez Klvro esté dentro del servidor, pulsa <b>Configurar</b>.</p>
+          <div class="note"><b>Importante:</b> el rol de Klvro debe estar por encima de los roles que quieras que gestione.</div>
+        </section>
+
+        <section id="panel" data-search="dashboard panel web configuración guardar cambios">
+          <h2>Panel web</h2>
+          <p>Desde el dashboard puedes activar módulos, elegir canales, roles y guardar la configuración de cada servidor. Los cambios quedan vinculados al servidor seleccionado.</p>
+        </section>
+
+        <section id="tickets" data-search="tickets soporte panel canal categoría staff transcript premium preview">
+          <h2>Tickets</h2>
+          <p>Activa el módulo, selecciona la categoría donde se crearán los tickets, el rol del staff y el canal donde Klvro publicará el panel.</p>
+          <ul>
+            <li>El panel se publica automáticamente en el canal elegido.</li>
+            <li>Si vuelves a editarlo, Klvro actualiza el mismo mensaje.</li>
+            <li>El preview del panel se muestra desde la web.</li>
+            <li>Premium desbloquea más opciones visuales.</li>
+          </ul>
+        </section>
+
+        <section id="moderacion" data-search="moderación antispam enlaces timeout mensajes">
+          <h2>Moderación</h2>
+          <p>Incluye controles automáticos como antispam, bloqueo de enlaces y registro de acciones de moderación.</p>
+        </section>
+
+        <section id="antiraid" data-search="anti raid antiraid lockdown nukes canales roles bans kicks webhooks">
+          <h2>Anti-Raid</h2>
+          <p>Protege entradas masivas, creación o borrado repetido de canales y roles, webhooks sospechosos, bans, kicks y permisos peligrosos.</p>
+          <div class="note"><b>Recomendación:</b> prueba primero el modo normal antes de usar configuraciones estrictas.</div>
+        </section>
+
+        <section id="administracion" data-search="administración ban kick warn purge slowmode lock nick role say embed">
+          <h2>Administración</h2>
+          <p>Klvro incluye herramientas para banear, expulsar, aplicar timeout, warns, limpiar mensajes, gestionar roles, bloquear canales y más.</p>
+        </section>
+
+        <section id="autoroles" data-search="autoroles rol automático miembro entrar">
+          <h2>Autoroles</h2>
+          <p>Permite asignar automáticamente un rol cuando un usuario entra al servidor.</p>
+        </section>
+
+        <section id="registros" data-search="logs registros mensajes miembros voz canal">
+          <h2>Registros</h2>
+          <p>Centraliza eventos del servidor como mensajes eliminados, entradas y salidas de miembros y cambios de canal de voz.</p>
+        </section>
+
+        <section id="comandos" data-search="comandos slash ping panel ticketpanel close antiraid ban kick timeout warn purge">
+          <h2>Comandos</h2>
+          <div class="command"><code>/ping</code><span>Muestra la latencia del bot.</span></div>
+          <div class="command"><code>/panel</code><span>Muestra el enlace al dashboard.</span></div>
+          <div class="command"><code>/ticketpanel</code><span>Publica el panel de tickets.</span></div>
+          <div class="command"><code>/close</code><span>Cierra el ticket actual.</span></div>
+          <div class="command"><code>/antiraid</code><span>Consulta o controla el Anti-Raid.</span></div>
+        </section>
+
+        <section id="premium" data-search="premium lite pro funciones planes">
+          <h2>Premium</h2>
+          <p>Klvro tiene funciones adicionales según el plan activo. Premium Lite amplía opciones de configuración y Premium Pro desbloquea personalización adicional.</p>
+        </section>
+
+        <section id="permisos" data-search="permisos discord rol jerarquía administrar canales roles mensajes">
+          <h2>Permisos</h2>
+          <p>Para gestionar correctamente canales, roles y miembros, Klvro necesita los permisos correspondientes y una posición de rol suficiente dentro de la jerarquía de Discord.</p>
+        </section>
+
+        <section id="problemas" data-search="problemas bot offline desconectado comandos no aparecen render permisos">
+          <h2>Problemas comunes</h2>
+          <h3>El bot aparece offline</h3>
+          <p>Comprueba que el servicio donde está alojado Klvro esté activo.</p>
+          <h3>Un comando no aparece</h3>
+          <p>Los comandos globales de Discord pueden tardar un poco en actualizarse después de un cambio.</p>
+          <h3>Klvro no puede gestionar un rol</h3>
+          <p>Mueve el rol del bot por encima del rol que intentas administrar.</p>
+        </section>
+      </article>
+    </main>
+  </div>
+  <script src="./app.js"></script>
+</body>
+</html>
