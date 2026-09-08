@@ -54,6 +54,19 @@ const showcaseServers = [
   { id: 'f', name: 'Soporte', members: 'Equipos y servicios', accent: 'yellow' },
 ];
 
+const publicRoutes = {
+  home: '/',
+  server: '/servidor',
+  status: '/estado',
+  commands: '/comandos',
+  features: '/funciones',
+  premium: '/premium',
+};
+
+function publicPageFromPath(pathname) {
+  return Object.entries(publicRoutes).find(([, path]) => path === pathname)?.[0] || 'home';
+}
+
 async function api(url, options = {}) {
   const response = await fetch(url, {
     credentials: 'same-origin',
@@ -72,6 +85,7 @@ async function api(url, options = {}) {
 
 function App() {
   const [screen, setScreen] = useState(window.location.pathname.startsWith('/app') ? 'servers' : 'landing');
+  const [publicPage, setPublicPage] = useState(publicPageFromPath(window.location.pathname));
   const [me, setMe] = useState({ loading: true, authenticated: false, user: null, premium: null });
   const [guilds, setGuilds] = useState([]);
   const [selectedServer, setSelectedServer] = useState(null);
@@ -96,7 +110,10 @@ function App() {
     if (billing === 'cancelled') setError('El pago fue cancelado.');
     if (billing === 'error') setError('No se pudo completar el pago.');
 
-    const onPop = () => setScreen(window.location.pathname.startsWith('/app') ? 'servers' : 'landing');
+    const onPop = () => {
+      setScreen(window.location.pathname.startsWith('/app') ? 'servers' : 'landing');
+      setPublicPage(publicPageFromPath(window.location.pathname));
+    };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
@@ -140,7 +157,17 @@ function App() {
   function goHome() {
     history.pushState({}, '', '/');
     setSelectedServer(null);
+    setPublicPage('home');
     setScreen('landing');
+  }
+
+  function goPublic(page) {
+    const path = publicRoutes[page] || '/';
+    history.pushState({}, '', path);
+    setPublicPage(page in publicRoutes ? page : 'home');
+    setSelectedServer(null);
+    setScreen('landing');
+    window.scrollTo(0, 0);
   }
 
   async function openServer(server) {
@@ -196,7 +223,10 @@ function App() {
     return (
       <>
         <Landing
+          page={publicPage}
           me={me}
+          onHome={goHome}
+          onNavigate={goPublic}
           onManage={goApp}
           onAdd={() => { window.location.href = '/api/discord/invite'; }}
           onLogin={() => { window.location.href = '/auth/discord'; }}
@@ -328,18 +358,12 @@ function App() {
   );
 }
 
-function Landing({ me, onManage, onAdd, onLogin, onPlan, error, clearError }) {
+function Landing({ page, me, onHome, onNavigate, onManage, onAdd, onLogin, onPlan, error, clearError }) {
   const [paidPlans, setPaidPlans] = useState([
     { id: 'lite', name: 'Premium Lite', amount: 299, days: 30 },
     { id: 'pro', name: 'Premium Pro', amount: 599, days: 30 },
   ]);
-  const [featuresOpen, setFeaturesOpen] = useState(false);
   const [liveStatus, setLiveStatus] = useState({ loading: true, botReady: false, guildCount: 0, latency: null });
-
-  const scrollTo = (selector) => {
-    setFeaturesOpen(false);
-    document.querySelector(selector)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
 
   useEffect(() => {
     api('/api/billing/plans').then((data) => setPaidPlans(data.plans || [])).catch(() => null);
@@ -350,46 +374,73 @@ function Landing({ me, onManage, onAdd, onLogin, onPlan, error, clearError }) {
 
   const paidById = Object.fromEntries(paidPlans.map((plan) => [plan.id, plan]));
   const plans = [
-    { id: 'free', name: 'Gratis', price: 'US$0', note: 'Para comenzar', features: ['Funciones básicas', 'Dashboard', 'Comandos esenciales', 'Soporte estándar'], cta: 'Empezar gratis' },
-    { id: 'lite', name: paidById.lite?.name || 'Premium Lite', price: formatPrice(paidById.lite?.amount ?? 299), note: `${paidById.lite?.days ?? 30} días`, features: ['Bienvenidas avanzadas', 'Más tickets', 'Más registros', 'Soporte prioritario'], cta: 'Obtener Lite', featured: true },
-    { id: 'pro', name: paidById.pro?.name || 'Premium Pro', price: formatPrice(paidById.pro?.amount ?? 599), note: `${paidById.pro?.days ?? 30} días`, features: ['Todo en Lite', 'Funciones avanzadas', 'Más capacidad', 'Mejor soporte'], cta: 'Obtener Pro' },
+    { id: 'free', name: 'Gratis', price: 'US$0', note: 'Sin pago', features: ['Panel web', 'Comandos básicos', 'Tickets', 'Moderación'], cta: 'Usar gratis' },
+    { id: 'lite', name: paidById.lite?.name || 'Premium Lite', price: formatPrice(paidById.lite?.amount ?? 299), note: `${paidById.lite?.days ?? 30} días`, features: ['Más opciones de configuración', 'Más registros', 'Más capacidad', 'Soporte prioritario'], cta: 'Comprar Lite', featured: true },
+    { id: 'pro', name: paidById.pro?.name || 'Premium Pro', price: formatPrice(paidById.pro?.amount ?? 599), note: `${paidById.pro?.days ?? 30} días`, features: ['Todo lo de Lite', 'Límites más altos', 'Funciones avanzadas', 'Soporte prioritario'], cta: 'Comprar Pro' },
+  ];
+
+  const commandGroups = [
+    {
+      title: 'Moderación',
+      items: [
+        ['/ban', 'Banea a un miembro.'],
+        ['/kick', 'Saca a un miembro del servidor.'],
+        ['/timeout', 'Aplica un timeout.'],
+        ['/untimeout', 'Quita el timeout.'],
+        ['/warn', 'Guarda una advertencia.'],
+        ['/warnings', 'Muestra las advertencias de un miembro.'],
+        ['/clearwarnings', 'Borra sus advertencias.'],
+        ['/purge', 'Borra varios mensajes.'],
+      ],
+    },
+    {
+      title: 'Canales y roles',
+      items: [
+        ['/slowmode', 'Cambia el modo lento del canal.'],
+        ['/lock', 'Bloquea el canal.'],
+        ['/unlock', 'Vuelve a abrirlo.'],
+        ['/role add', 'Añade un rol.'],
+        ['/role remove', 'Quita un rol.'],
+        ['/nick', 'Cambia el apodo de un miembro.'],
+      ],
+    },
+    {
+      title: 'Anti-Raid',
+      items: [
+        ['/antiraid status', 'Muestra el estado del Anti-Raid.'],
+        ['/antiraid lockdown', 'Activa la protección reforzada.'],
+        ['/antiraid unlock', 'Quita el lockdown manual.'],
+      ],
+    },
+    {
+      title: 'Utilidades',
+      items: [
+        ['/say', 'Hace que Klvro envíe un mensaje.'],
+        ['/embed', 'Envía un embed.'],
+        ['/userinfo', 'Muestra información de un usuario.'],
+        ['/serverinfo', 'Muestra información del servidor.'],
+      ],
+    },
   ];
 
   return (
-    <div className="landing-screen">
+    <div className="landing-screen public-site">
       <header className="landing-nav">
-        <button className="landing-brand brand-button" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+        <button className="landing-brand brand-button" onClick={onHome}>
           <LogoMark className="landing-brand-avatar" />
           <strong>Klvro</strong>
         </button>
         <nav className="landing-links">
           <button onClick={onManage}>Panel</button>
           <button onClick={onAdd}>Invitar</button>
-          <button onClick={() => scrollTo('.social-proof')}>Servidor</button>
-          <button onClick={() => scrollTo('.landing-status-section')}>Estado</button>
-          <button onClick={() => scrollTo('.commands-section')}>Comandos</button>
-          <div className="landing-functions-menu">
-            <button
-              className={featuresOpen ? 'active' : ''}
-              onClick={() => setFeaturesOpen((value) => !value)}
-              aria-expanded={featuresOpen}
-            >
-              Funciones <ChevronDown size={14} className={featuresOpen ? 'chevron-open' : ''} />
-            </button>
-            {featuresOpen && (
-              <div className="landing-functions-dropdown">
-                <button onClick={() => scrollTo('.features-section')}>Ver todas</button>
-                <button onClick={() => scrollTo('#feature-antiraid')}>Anti-Raid</button>
-                <button onClick={() => scrollTo('#feature-admin')}>Administración</button>
-                <button onClick={() => scrollTo('#feature-tickets')}>Tickets</button>
-                <button onClick={() => scrollTo('#feature-logs')}>Registros</button>
-              </div>
-            )}
-          </div>
+          <button className={page === 'server' ? 'active' : ''} onClick={() => onNavigate('server')}>Servidor</button>
+          <button className={page === 'status' ? 'active' : ''} onClick={() => onNavigate('status')}>Estado</button>
+          <button className={page === 'commands' ? 'active' : ''} onClick={() => onNavigate('commands')}>Comandos</button>
+          <button className={page === 'features' ? 'active' : ''} onClick={() => onNavigate('features')}>Funciones</button>
         </nav>
         <div className="landing-actions">
-          <button className="premium-chip" onClick={() => document.querySelector('.pricing-section')?.scrollIntoView({ behavior: 'smooth' })}><Sparkles size={14} /> Premium</button>
-          <button className="lang-chip"><Globe size={14} /> ES <ChevronDown size={14} /></button>
+          <button className={`premium-chip ${page === 'premium' ? 'active' : ''}`} onClick={() => onNavigate('premium')}><Sparkles size={14} /> Premium</button>
+          <span className="lang-chip"><Globe size={14} /> ES</span>
           {me.authenticated ? (
             <button className="login-link" onClick={onManage}>{me.user?.globalName || me.user?.username}</button>
           ) : (
@@ -400,110 +451,141 @@ function Landing({ me, onManage, onAdd, onLogin, onPlan, error, clearError }) {
 
       {error && <div className="landing-notice"><Notice text={error} onClose={clearError} /></div>}
 
-      <section className="landing-hero dotted-bg">
-        <LogoMark className="hero-bot-avatar" />
-        <h1>Klvro</h1>
-        <p>Un bot multifunción para Discord con una dashboard limpia, rápida y fácil de usar.</p>
-        <div className="hero-buttons">
-          <button className="secondary-hero-button" onClick={onAdd}><DiscordIcon className="brand-discord-icon" /> Añadir a Discord</button>
-          <button className="primary-hero-button" onClick={onManage}><Settings size={18} /> Administrar servidores</button>
-        </div>
-      </section>
-
-      <section className="landing-status-section">
-        <div className="section-heading">
-          <p className="eyebrow">ESTADO</p>
-          <h2>Estado de Klvro en tiempo real</h2>
-          <p>Comprueba si el bot y la API están disponibles antes de administrarlo.</p>
-        </div>
-        <div className="status-grid">
-          <article className="status-card">
-            <div className={`status-icon ${liveStatus.botReady ? 'online' : 'offline'}`}><Activity size={20} /></div>
-            <div>
-              <span className="status-label">Bot de Discord</span>
-              <strong>{liveStatus.loading ? 'Comprobando…' : liveStatus.botReady ? 'Conectado' : 'No conectado'}</strong>
+      {page === 'home' && (
+        <main className="public-page home-page">
+          <section className="landing-hero dotted-bg">
+            <LogoMark className="hero-bot-avatar" />
+            <h1>Klvro</h1>
+            <p>Configura el bot desde la web y úsalo en Discord. Moderación, tickets, logs y Anti-Raid.</p>
+            <div className="hero-buttons">
+              <button className="secondary-hero-button" onClick={onAdd}><DiscordIcon className="brand-discord-icon" /> Añadir a Discord</button>
+              <button className="primary-hero-button" onClick={onManage}><Settings size={18} /> Abrir panel</button>
             </div>
-          </article>
-          <article className="status-card">
-            <div className="status-icon"><Users size={20} /></div>
-            <div><span className="status-label">Servidores</span><strong>{liveStatus.guildCount ?? 0}</strong></div>
-          </article>
-          <article className="status-card">
-            <div className="status-icon"><Activity size={20} /></div>
-            <div><span className="status-label">Latencia</span><strong>{liveStatus.latency == null ? '—' : `${liveStatus.latency} ms`}</strong></div>
-          </article>
-        </div>
-      </section>
+          </section>
+          <section className="home-links-section">
+            <div className="home-link-grid">
+              <button onClick={() => onNavigate('server')}><Users size={20} /><div><strong>Servidor</strong><span>Cómo añadir y configurar Klvro.</span></div><ChevronRight size={18} /></button>
+              <button onClick={() => onNavigate('status')}><Activity size={20} /><div><strong>Estado</strong><span>Comprueba si el bot está conectado.</span></div><ChevronRight size={18} /></button>
+              <button onClick={() => onNavigate('commands')}><Command size={20} /><div><strong>Comandos</strong><span>Lista de comandos disponibles.</span></div><ChevronRight size={18} /></button>
+              <button onClick={() => onNavigate('features')}><ShieldCheck size={20} /><div><strong>Funciones</strong><span>Todo lo que puedes activar desde el panel.</span></div><ChevronRight size={18} /></button>
+            </div>
+          </section>
+        </main>
+      )}
 
-      <section className="features-section">
-        <div className="section-heading">
-          <p className="eyebrow">FUNCIONES</p>
-          <h2>Todo lo importante desde un solo bot</h2>
-          <p>Configura cada módulo desde la dashboard y Klvro aplica los cambios directamente en Discord.</p>
-        </div>
-        <div className="feature-showcase-grid">
-          <article className="feature-showcase-card" id="feature-antiraid"><ShieldAlert size={22} /><div><h3>Anti-Raid</h3><p>Detecta entradas masivas y acciones administrativas sospechosas.</p></div></article>
-          <article className="feature-showcase-card" id="feature-admin"><UserCog size={22} /><div><h3>Administración</h3><p>Ban, kick, timeout, warns, roles, slowmode, lock y más.</p></div></article>
-          <article className="feature-showcase-card" id="feature-tickets"><Ticket size={22} /><div><h3>Tickets</h3><p>Soporte organizado con categorías, staff y registros.</p></div></article>
-          <article className="feature-showcase-card" id="feature-logs"><ClipboardList size={22} /><div><h3>Registros</h3><p>Centraliza eventos importantes del servidor en canales de logs.</p></div></article>
-          <article className="feature-showcase-card"><UserPlus size={22} /><div><h3>Bienvenidas</h3><p>Mensajes de bienvenida y configuración por servidor.</p></div></article>
-          <article className="feature-showcase-card"><Users size={22} /><div><h3>Autoroles</h3><p>Asigna automáticamente roles a miembros y bots.</p></div></article>
-        </div>
-      </section>
+      {page === 'server' && (
+        <main className="public-page">
+          <section className="public-page-head">
+            <p className="eyebrow">SERVIDOR</p>
+            <h1>Añade Klvro y configura tu servidor</h1>
+            <p>Entra con Discord, elige un servidor y Klvro te lleva al panel.</p>
+            <div className="hero-buttons compact-actions">
+              <button className="primary-hero-button" onClick={onManage}><Settings size={18} /> Ir al panel</button>
+              <button className="secondary-hero-button" onClick={onAdd}><DiscordIcon className="brand-discord-icon" /> Invitar bot</button>
+            </div>
+          </section>
+          <section className="server-steps-grid">
+            <article><span>1</span><h3>Inicia sesión</h3><p>Usa tu cuenta de Discord.</p></article>
+            <article><span>2</span><h3>Elige el servidor</h3><p>Solo aparecen los que puedes administrar.</p></article>
+            <article><span>3</span><h3>Configura</h3><p>Activa módulos, elige canales y guarda.</p></article>
+          </section>
+          <section className="server-types-block">
+            <h2>Funciona en distintos tipos de servidor</h2>
+            <div className="showcase-grid">
+              {showcaseServers.map((server) => (
+                <article className="showcase-card" key={server.id}>
+                  <div className={`showcase-avatar ${server.accent}`}>{server.name.slice(0, 1)}</div>
+                  <div className="showcase-copy"><strong>{server.name}</strong><span>{server.members}</span></div>
+                </article>
+              ))}
+            </div>
+          </section>
+        </main>
+      )}
 
-      <section className="commands-section">
-        <div className="section-heading">
-          <p className="eyebrow">COMANDOS</p>
-          <h2>Comandos de moderación listos para usar</h2>
-          <p>Los comandos slash se registran automáticamente cuando el bot inicia.</p>
-        </div>
-        <div className="command-preview-grid">
-          {['/ban', '/kick', '/timeout', '/warn', '/warnings', '/purge', '/lock', '/unlock', '/role', '/antiraid status'].map((commandName) => (
-            <code key={commandName}>{commandName}</code>
-          ))}
-        </div>
-        <button className="secondary-button command-cta" onClick={onManage}><Command size={17} /> Abrir panel de comandos</button>
-      </section>
-
-      <section className="social-proof">
-        <h2>Diseñado para todo tipo de comunidades</h2>
-        <div className="showcase-grid">
-          {showcaseServers.map((server) => (
-            <article className="showcase-card" key={server.id}>
-              <div className={`showcase-avatar ${server.accent}`}>{server.name.slice(0, 1)}</div>
-              <div className="showcase-copy">
-                <div className="showcase-title-row"><strong>{server.name}</strong></div>
-                <span>{server.members}</span>
-              </div>
+      {page === 'status' && (
+        <main className="public-page">
+          <section className="public-page-head">
+            <p className="eyebrow">ESTADO</p>
+            <h1>Estado de Klvro</h1>
+            <p>Aquí puedes ver si el bot está conectado.</p>
+          </section>
+          <section className="status-grid public-status-grid">
+            <article className="status-card">
+              <div className={`status-icon ${liveStatus.botReady ? 'online' : 'offline'}`}><Activity size={20} /></div>
+              <div><span className="status-label">Bot</span><strong>{liveStatus.loading ? 'Comprobando…' : liveStatus.botReady ? 'Online' : 'Offline'}</strong></div>
             </article>
-          ))}
-        </div>
-      </section>
+            <article className="status-card"><div className="status-icon"><Users size={20} /></div><div><span className="status-label">Servidores</span><strong>{liveStatus.guildCount ?? 0}</strong></div></article>
+            <article className="status-card"><div className="status-icon"><Activity size={20} /></div><div><span className="status-label">Latencia</span><strong>{liveStatus.latency == null ? '—' : `${liveStatus.latency} ms`}</strong></div></article>
+          </section>
+          <div className="status-note">La información sale directamente de la API de Klvro.</div>
+        </main>
+      )}
 
-      <section className="pricing-section">
-        <div className="pricing-head">
-          <p className="eyebrow pricing-eyebrow">PREMIUM</p>
-          <h2>Planes simples y baratos</h2>
-          <p>Sin contratos largos. Premium se activa por 30 días y puedes renovarlo cuando quieras.</p>
-        </div>
-        <div className="pricing-grid">
-          {plans.map((plan) => (
-            <article className={`pricing-card ${plan.featured ? 'featured' : ''}`} key={plan.id}>
-              <div className="pricing-top">
-                <div><h3>{plan.name}</h3><p>{plan.note}</p></div>
-                {plan.featured && <span className="plan-badge">Popular</span>}
-              </div>
-              <div className="pricing-price">{plan.price}</div>
-              <ul className="pricing-features">{plan.features.map((feature) => <li key={feature}><Check size={15} /> {feature}</li>)}</ul>
-              <button className={plan.featured ? 'primary-button full' : 'secondary-button full'} onClick={() => plan.id === 'free' ? onManage() : onPlan(plan)}>{plan.cta}</button>
-            </article>
-          ))}
-        </div>
-        <div className="payments-bar">
-          <div className="payments-copy"><CreditCard size={18} /><span>Paga con <strong>PayPal</strong> o <strong>tarjeta de crédito/débito</strong>.</span></div>
-          <div className="payment-pills"><span>PayPal</span><span>Visa</span><span>Mastercard</span></div>
-        </div>
-      </section>
+      {page === 'commands' && (
+        <main className="public-page">
+          <section className="public-page-head">
+            <p className="eyebrow">COMANDOS</p>
+            <h1>Comandos</h1>
+            <p>Los principales comandos que trae Klvro.</p>
+          </section>
+          <section className="commands-page-grid">
+            {commandGroups.map((group) => (
+              <article className="command-group-card" key={group.title}>
+                <h2>{group.title}</h2>
+                <div className="command-rows">
+                  {group.items.map(([name, description]) => (
+                    <div className="command-row" key={name}><code>{name}</code><span>{description}</span></div>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </section>
+        </main>
+      )}
+
+      {page === 'features' && (
+        <main className="public-page">
+          <section className="public-page-head">
+            <p className="eyebrow">FUNCIONES</p>
+            <h1>Funciones</h1>
+            <p>Activa solo lo que vayas a usar.</p>
+          </section>
+          <section className="feature-showcase-grid public-feature-grid">
+            <article className="feature-showcase-card"><ShieldAlert size={22} /><div><h3>Anti-Raid</h3><p>Detecta entradas masivas y acciones sensibles repetidas.</p></div></article>
+            <article className="feature-showcase-card"><UserCog size={22} /><div><h3>Administración</h3><p>Ban, kick, timeout, warns, roles, canales y más.</p></div></article>
+            <article className="feature-showcase-card"><Ticket size={22} /><div><h3>Tickets</h3><p>Crea tickets privados con staff y registros.</p></div></article>
+            <article className="feature-showcase-card"><ClipboardList size={22} /><div><h3>Registros</h3><p>Entradas, salidas, mensajes y eventos del servidor.</p></div></article>
+            <article className="feature-showcase-card"><UserPlus size={22} /><div><h3>Bienvenidas</h3><p>Mensaje en canal y, si quieres, también por DM.</p></div></article>
+            <article className="feature-showcase-card"><Users size={22} /><div><h3>Autoroles</h3><p>Entrega un rol cuando entra un miembro.</p></div></article>
+          </section>
+          <div className="public-bottom-action"><button className="primary-hero-button" onClick={onManage}><Settings size={18} /> Configurar servidor</button></div>
+        </main>
+      )}
+
+      {page === 'premium' && (
+        <main className="public-page premium-page">
+          <section className="public-page-head">
+            <p className="eyebrow">PREMIUM</p>
+            <h1>Premium</h1>
+            <p>30 días por compra. No se renueva solo.</p>
+          </section>
+          <section className="pricing-grid public-pricing-grid">
+            {plans.map((plan) => (
+              <article className={`pricing-card ${plan.featured ? 'featured' : ''}`} key={plan.id}>
+                <div className="pricing-top"><div><h3>{plan.name}</h3><p>{plan.note}</p></div>{plan.featured && <span className="plan-badge">Popular</span>}</div>
+                <div className="pricing-price">{plan.price}</div>
+                <ul className="pricing-features">{plan.features.map((feature) => <li key={feature}><Check size={15} /> {feature}</li>)}</ul>
+                <button className={plan.featured ? 'primary-button full' : 'secondary-button full'} onClick={() => plan.id === 'free' ? onManage() : onPlan(plan)}>{plan.cta}</button>
+              </article>
+            ))}
+          </section>
+          <div className="payments-bar public-payments-bar">
+            <div className="payments-copy"><CreditCard size={18} /><span>PayPal o tarjeta.</span></div>
+            <div className="payment-pills"><span>PayPal</span><span>Visa</span><span>Mastercard</span></div>
+          </div>
+        </main>
+      )}
     </div>
   );
 }
@@ -533,7 +615,7 @@ function PaymentModal({ plan, onClose }) {
         <button className="modal-close" onClick={onClose}><X size={18} /></button>
         <LogoMark className="modal-logo" />
         <h2>{plan.name}</h2>
-        <p>{plan.price} por 30 días. Elige cómo quieres pagar.</p>
+        <p>{plan.price} por 30 días.</p>
         {error && <Notice text={error} />}
         <button className="payment-option paypal" onClick={() => pay('paypal')} disabled={!!loading}>
           {loading === 'paypal' ? <LoaderCircle className="spin" size={19} /> : <span className="paypal-word">PayPal</span>}
@@ -543,7 +625,7 @@ function PaymentModal({ plan, onClose }) {
           {loading === 'stripe' ? <LoaderCircle className="spin" size={19} /> : <CreditCard size={19} />}
           <span>Pagar con tarjeta</span>
         </button>
-        <small>Los datos de pago se procesan en PayPal o Stripe; Klvro no almacena números de tarjeta.</small>
+        <small>PayPal y Stripe procesan el pago. Klvro no guarda los datos de tu tarjeta.</small>
       </div>
     </div>
   );
@@ -559,11 +641,11 @@ function ServerSelect({ guilds, me, loading, error, onSelect, onRefresh, onLogou
       <main className="servers-content">
         {error && <Notice text={error} />}
         <div className="page-heading">
-          <div><p className="eyebrow">DASHBOARD</p><h1>Selecciona un servidor</h1><p>Mostramos los servidores donde tienes permiso para administrar.</p></div>
+          <div><p className="eyebrow">DASHBOARD</p><h1>Selecciona un servidor</h1><p>Servidores que puedes administrar.</p></div>
           <button className="secondary-button" onClick={onRefresh}><RefreshCcw size={16} /> Actualizar</button>
         </div>
         {!guilds.length ? (
-          <div className="empty-state"><Users size={28} /><h3>No encontramos servidores administrables</h3><p>Verifica que tengas el permiso Administrar servidor o que seas propietario.</p></div>
+          <div className="empty-state"><Users size={28} /><h3>No hay servidores para mostrar</h3><p>Necesitas ser dueño o tener Administrar servidor.</p></div>
         ) : (
           <div className="server-grid">
             {guilds.map((server) => (
@@ -614,7 +696,7 @@ function Overview({ server, settings, status, onNavigate }) {
   return (
     <>
       <section className="hero-card">
-        <div className="hero-server"><ServerIcon server={server} size="hero" /><div><div className="status-line"><span className="status-dot" /> {status.botReady ? 'Bot conectado' : 'Bot iniciando'}</div><h2>{server.name}</h2><p>Los cambios se guardan en la base de datos de Klvro.</p></div></div>
+        <div className="hero-server"><ServerIcon server={server} size="hero" /><div><div className="status-line"><span className="status-dot" /> {status.botReady ? 'Bot conectado' : 'Bot iniciando'}</div><h2>{server.name}</h2><p>Configuración guardada.</p></div></div>
         <a className="secondary-button anchor-button" href="https://discord.com/app" target="_blank" rel="noreferrer"><ExternalLink size={16} /> Abrir Discord</a>
       </section>
       <section className="stat-grid">
@@ -623,7 +705,7 @@ function Overview({ server, settings, status, onNavigate }) {
         <div className="stat-card"><div><p>Estado</p><strong className="online-text">{status.botReady ? 'Online' : 'Offline'}</strong></div><Activity size={20} /></div>
         <div className="stat-card"><div><p>Latencia</p><strong>{status.latency == null ? '—' : `${status.latency} ms`}</strong></div><Activity size={20} /></div>
       </section>
-      <div className="section-heading"><div><h2>Módulos</h2><p>Configura las funciones principales del bot.</p></div></div>
+      <div className="section-heading"><div><h2>Módulos</h2><p>Elige qué quieres usar.</p></div></div>
       <section className="module-grid">
         {modules.map((module) => {
           const Icon = module.icon;
@@ -639,15 +721,15 @@ function SettingsPage({ section, settings, setSettings, resources, onSave, saved
   const config = settings[section] || {};
   const set = (key, value) => setSettings((prev) => ({ ...prev, [section]: { ...prev[section], [key]: value } }));
   const meta = {
-    general: ['Configuración general', 'Ajustes básicos de funcionamiento del bot.'],
-    welcome: ['Bienvenidas', 'Configura lo que ocurre cuando entra un nuevo miembro.'],
-    tickets: ['Sistema de tickets', 'Ajusta el soporte privado y el registro de tickets.'],
-    moderation: ['Moderación', 'Protecciones básicas para el servidor.'],
-    antiRaid: ['Anti-Raid', 'Detecta raids de entradas y acciones administrativas destructivas.'],
-    administration: ['Administración', 'Configura las herramientas de moderación del staff.'],
-    autoroles: ['Autoroles', 'Entrega roles automáticamente al entrar.'],
-    logs: ['Registros', 'Elige qué eventos debe registrar Klvro.'],
-    commands: ['Comandos', 'Controla cómo interactúan los miembros con el bot.'],
+    general: ['Configuración general', 'Opciones básicas del bot.'],
+    welcome: ['Bienvenidas', 'Qué hacer cuando entra un miembro.'],
+    tickets: ['Sistema de tickets', 'Canales, staff y registros de tickets.'],
+    moderation: ['Moderación', 'Antispam y bloqueo de enlaces.'],
+    antiRaid: ['Anti-Raid', 'Protección contra raids y acciones masivas.'],
+    administration: ['Administración', 'Ajustes de los comandos del staff.'],
+    autoroles: ['Autoroles', 'Rol automático al entrar.'],
+    logs: ['Registros', 'Elige qué quieres guardar en logs.'],
+    commands: ['Comandos', 'Slash commands y prefijo.'],
   }[section];
 
   return (
@@ -669,7 +751,7 @@ function SettingsPage({ section, settings, setSettings, resources, onSave, saved
         <div className="save-bar"><div>{savedAt ? <span className="saved-label">Cambios guardados</span> : <span>Los cambios se aplican al guardar.</span>}</div><button className="primary-button" onClick={onSave}><Save size={16} /> Guardar cambios</button></div>
       </div>
       <aside className="settings-help">
-        <div className="help-card"><CircleHelp size={19} /><h3>¿Necesitas ayuda?</h3><p>Los canales y roles mostrados aquí se obtienen directamente del servidor de Discord.</p></div>
+        <div className="help-card"><CircleHelp size={19} /><h3>Ayuda</h3><p>Los canales y roles salen de tu servidor de Discord.</p></div>
         <div className="help-card plain"><p className="small-label">ESTADO</p><div className="bot-status"><span className="status-dot" /><div><strong>Configuración conectada</strong><span>Guardada en PostgreSQL</span></div></div></div>
       </aside>
     </div>
