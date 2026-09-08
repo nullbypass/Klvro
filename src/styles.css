@@ -632,3 +632,22 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .server-types-block .showcase-grid { grid-template-columns: 1fr; }
   .command-row { grid-template-columns: 1fr; gap: 7px; }
 }
+
+/* Dashboard server list: installed servers are clearly separated from invite-only servers. */
+.dashboard-return-button { display: inline-flex; align-items: center; gap: 7px; }
+.server-sections { display: grid; gap: 34px; }
+.server-list-section { display: grid; gap: 15px; }
+.server-list-secondary { padding-top: 28px; border-top: 1px solid var(--border-soft); }
+.server-list-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.server-list-heading h2 { margin: 0 0 5px; font-size: 20px; letter-spacing: -.02em; }
+.server-list-heading p { margin: 0; color: var(--muted); font-size: 14px; }
+.server-count { min-width: 30px; height: 30px; padding: 0 9px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 800; }
+.server-card-installed { border-color: rgba(120, 130, 255, .34); background: linear-gradient(180deg, rgba(94, 80, 220, .08), var(--panel)); }
+.server-card-copy { min-width: 0; }
+.server-installed-badge { margin-top: 9px; width: fit-content; display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px; border-radius: 999px; background: rgba(87, 242, 135, .10); border: 1px solid rgba(87, 242, 135, .18); color: #93efaf; font-size: 12px; font-weight: 800; }
+.server-inline-empty { padding: 20px; border: 1px dashed var(--border); border-radius: 13px; color: var(--muted); background: rgba(255,255,255,.015); font-size: 14px; }
+
+@media (max-width: 720px) {
+  .server-list-heading { align-items: flex-start; }
+  .dashboard-return-button { font-size: 13px; }
+}

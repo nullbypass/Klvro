@@ -119,7 +119,20 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (screen === 'servers' && me.authenticated) loadGuilds();
+    if (screen !== 'servers' || !me.authenticated) return;
+
+    loadGuilds();
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') loadGuilds();
+    };
+    const refreshOnFocus = () => loadGuilds();
+
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    window.addEventListener('focus', refreshOnFocus);
+    return () => {
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+      window.removeEventListener('focus', refreshOnFocus);
+    };
   }, [screen, me.authenticated]);
 
   async function loadMe() {
@@ -442,7 +455,7 @@ function Landing({ page, me, onHome, onNavigate, onManage, onAdd, onLogin, onPla
           <button className={`premium-chip ${page === 'premium' ? 'active' : ''}`} onClick={() => onNavigate('premium')}><Sparkles size={14} /> Premium</button>
           <span className="lang-chip"><Globe size={14} /> ES</span>
           {me.authenticated ? (
-            <button className="login-link" onClick={onManage}>{me.user?.globalName || me.user?.username}</button>
+            <button className="login-link dashboard-return-button" onClick={onManage}><Settings size={15} /> Volver al dashboard</button>
           ) : (
             <button className="login-link" onClick={onLogin}>Iniciar sesión</button>
           )}
@@ -459,7 +472,7 @@ function Landing({ page, me, onHome, onNavigate, onManage, onAdd, onLogin, onPla
             <p>Configura el bot desde la web y úsalo en Discord. Moderación, tickets, logs y Anti-Raid.</p>
             <div className="hero-buttons">
               <button className="secondary-hero-button" onClick={onAdd}><DiscordIcon className="brand-discord-icon" /> Añadir a Discord</button>
-              <button className="primary-hero-button" onClick={onManage}><Settings size={18} /> Abrir panel</button>
+              <button className="primary-hero-button" onClick={onManage}><Settings size={18} /> {me.authenticated ? 'Volver al dashboard' : 'Abrir panel'}</button>
             </div>
           </section>
           <section className="home-links-section">
@@ -480,7 +493,7 @@ function Landing({ page, me, onHome, onNavigate, onManage, onAdd, onLogin, onPla
             <h1>Añade Klvro y configura tu servidor</h1>
             <p>Entra con Discord, elige un servidor y Klvro te lleva al panel.</p>
             <div className="hero-buttons compact-actions">
-              <button className="primary-hero-button" onClick={onManage}><Settings size={18} /> Ir al panel</button>
+              <button className="primary-hero-button" onClick={onManage}><Settings size={18} /> {me.authenticated ? 'Volver al dashboard' : 'Ir al panel'}</button>
               <button className="secondary-hero-button" onClick={onAdd}><DiscordIcon className="brand-discord-icon" /> Invitar bot</button>
             </div>
           </section>
@@ -632,6 +645,29 @@ function PaymentModal({ plan, onClose }) {
 }
 
 function ServerSelect({ guilds, me, loading, error, onSelect, onRefresh, onLogout, onHome }) {
+  const installedGuilds = guilds.filter((server) => server.botAdded);
+  const availableGuilds = guilds.filter((server) => !server.botAdded);
+
+  const renderServerCard = (server) => (
+    <article className={`server-card ${server.botAdded ? 'server-card-installed' : ''}`} key={server.id}>
+      <div className="server-card-main">
+        <ServerIcon server={server} size="large" />
+        <div className="server-card-copy">
+          <h3>{server.name}</h3>
+          <p>{formatMembers(server.memberCount)}</p>
+          {server.botAdded && <span className="server-installed-badge"><Check size={13} /> Klvro ya está aquí</span>}
+        </div>
+      </div>
+      {server.botAdded ? (
+        <button className="primary-button full" onClick={() => onSelect(server)} disabled={loading}>
+          {loading ? <LoaderCircle className="spin" size={16} /> : <>Configurar <ChevronRight size={16} /></>}
+        </button>
+      ) : (
+        <button className="secondary-button full" onClick={() => onSelect(server)}><DiscordIcon className="button-discord-icon" /> Añadir Klvro</button>
+      )}
+    </article>
+  );
+
   return (
     <div className="servers-screen">
       <header className="servers-header">
@@ -641,23 +677,35 @@ function ServerSelect({ guilds, me, loading, error, onSelect, onRefresh, onLogou
       <main className="servers-content">
         {error && <Notice text={error} />}
         <div className="page-heading">
-          <div><p className="eyebrow">DASHBOARD</p><h1>Selecciona un servidor</h1><p>Servidores que puedes administrar.</p></div>
+          <div><p className="eyebrow">DASHBOARD</p><h1>Tus servidores</h1><p>Elige uno para configurarlo o añade Klvro a otro.</p></div>
           <button className="secondary-button" onClick={onRefresh}><RefreshCcw size={16} /> Actualizar</button>
         </div>
+
         {!guilds.length ? (
           <div className="empty-state"><Users size={28} /><h3>No hay servidores para mostrar</h3><p>Necesitas ser dueño o tener Administrar servidor.</p></div>
         ) : (
-          <div className="server-grid">
-            {guilds.map((server) => (
-              <article className="server-card" key={server.id}>
-                <div className="server-card-main"><ServerIcon server={server} size="large" /><div><h3>{server.name}</h3><p>{formatMembers(server.memberCount)}</p></div></div>
-                {server.botAdded ? (
-                  <button className="primary-button full" onClick={() => onSelect(server)} disabled={loading}>{loading ? <LoaderCircle className="spin" size={16} /> : <>Administrar <ChevronRight size={16} /></>}</button>
-                ) : (
-                  <button className="secondary-button full" onClick={() => onSelect(server)}><DiscordIcon className="button-discord-icon" /> Añadir Klvro</button>
-                )}
-              </article>
-            ))}
+          <div className="server-sections">
+            <section className="server-list-section">
+              <div className="server-list-heading">
+                <div><h2>Listos para configurar</h2><p>Servidores donde Klvro ya está añadido.</p></div>
+                <span className="server-count">{installedGuilds.length}</span>
+              </div>
+              {installedGuilds.length ? (
+                <div className="server-grid">{installedGuilds.map(renderServerCard)}</div>
+              ) : (
+                <div className="server-inline-empty">Todavía no has añadido Klvro a ninguno de estos servidores.</div>
+              )}
+            </section>
+
+            {availableGuilds.length > 0 && (
+              <section className="server-list-section server-list-secondary">
+                <div className="server-list-heading">
+                  <div><h2>Otros servidores</h2><p>Puedes añadir Klvro desde aquí.</p></div>
+                  <span className="server-count">{availableGuilds.length}</span>
+                </div>
+                <div className="server-grid">{availableGuilds.map(renderServerCard)}</div>
+              </section>
+            )}
           </div>
         )}
       </main>
