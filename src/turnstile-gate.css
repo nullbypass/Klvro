@@ -1,0 +1,123 @@
+.cf-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 999999;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  background:
+    radial-gradient(circle at 50% 15%, rgba(88,101,242,.11), transparent 34%),
+    #0b0d12;
+  color: #f5f6f8;
+}
+
+.cf-gate-card {
+  width: min(100%, 430px);
+  padding: 30px;
+  border: 1px solid #262b36;
+  border-radius: 18px;
+  background: rgba(18,21,28,.96);
+  box-shadow: 0 28px 80px rgba(0,0,0,.38);
+  text-align: center;
+}
+
+.cf-gate-logo {
+  width: 58px;
+  height: 58px;
+  margin-bottom: 18px;
+  border-radius: 16px;
+  object-fit: cover;
+}
+
+.cf-gate-card h1 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.2;
+  letter-spacing: -.02em;
+}
+
+.cf-gate-card > p {
+  margin: 9px auto 22px;
+  max-width: 330px;
+  color: #9da4b2;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.cf-gate-widget-wrap {
+  min-height: 70px;
+  display: grid;
+  place-items: center;
+}
+
+.cf-gate-widget {
+  min-height: 65px;
+}
+
+.cf-gate-spinner {
+  width: 26px;
+  height: 26px;
+  border: 3px solid #2d3340;
+  border-top-color: #858dff;
+  border-radius: 999px;
+  animation: cf-gate-spin .8s linear infinite;
+}
+
+.cf-gate-success {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(35,165,90,.13);
+  border: 1px solid rgba(35,165,90,.35);
+  color: #65d98d;
+  font-size: 23px;
+  font-weight: 800;
+}
+
+.cf-gate-status {
+  min-height: 20px;
+  margin-top: 14px;
+  color: #aeb5c0;
+  font-size: 12px;
+}
+
+.cf-gate-status.error {
+  color: #f18b91;
+}
+
+.cf-gate-retry {
+  min-height: 38px;
+  margin-top: 12px;
+  padding: 0 16px;
+  border: 1px solid #343b4b;
+  border-radius: 9px;
+  background: #20242e;
+  color: #f4f5f7;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cf-gate-retry:hover {
+  background: #272c38;
+}
+
+.cf-gate-card small {
+  display: block;
+  margin-top: 18px;
+  color: #666e7c;
+  font-size: 11px;
+}
+
+@keyframes cf-gate-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 520px) {
+  .cf-gate { padding: 14px; }
+  .cf-gate-card { padding: 24px 18px; border-radius: 15px; }
+  .cf-gate-card h1 { font-size: 20px; }
+}
