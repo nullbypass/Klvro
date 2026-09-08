@@ -333,9 +333,19 @@ function Landing({ me, onManage, onAdd, onLogin, onPlan, error, clearError }) {
     { id: 'lite', name: 'Premium Lite', amount: 299, days: 30 },
     { id: 'pro', name: 'Premium Pro', amount: 599, days: 30 },
   ]);
+  const [featuresOpen, setFeaturesOpen] = useState(false);
+  const [liveStatus, setLiveStatus] = useState({ loading: true, botReady: false, guildCount: 0, latency: null });
+
+  const scrollTo = (selector) => {
+    setFeaturesOpen(false);
+    document.querySelector(selector)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   useEffect(() => {
     api('/api/billing/plans').then((data) => setPaidPlans(data.plans || [])).catch(() => null);
+    api('/api/status')
+      .then((data) => setLiveStatus({ loading: false, ...data }))
+      .catch(() => setLiveStatus((current) => ({ ...current, loading: false })));
   }, []);
 
   const paidById = Object.fromEntries(paidPlans.map((plan) => [plan.id, plan]));
@@ -355,10 +365,27 @@ function Landing({ me, onManage, onAdd, onLogin, onPlan, error, clearError }) {
         <nav className="landing-links">
           <button onClick={onManage}>Panel</button>
           <button onClick={onAdd}>Invitar</button>
-          <button>Servidor</button>
-          <button>Estado</button>
-          <button>Comandos</button>
-          <button>Funciones <ChevronDown size={14} /></button>
+          <button onClick={() => scrollTo('.social-proof')}>Servidor</button>
+          <button onClick={() => scrollTo('.landing-status-section')}>Estado</button>
+          <button onClick={() => scrollTo('.commands-section')}>Comandos</button>
+          <div className="landing-functions-menu">
+            <button
+              className={featuresOpen ? 'active' : ''}
+              onClick={() => setFeaturesOpen((value) => !value)}
+              aria-expanded={featuresOpen}
+            >
+              Funciones <ChevronDown size={14} className={featuresOpen ? 'chevron-open' : ''} />
+            </button>
+            {featuresOpen && (
+              <div className="landing-functions-dropdown">
+                <button onClick={() => scrollTo('.features-section')}>Ver todas</button>
+                <button onClick={() => scrollTo('#feature-antiraid')}>Anti-Raid</button>
+                <button onClick={() => scrollTo('#feature-admin')}>Administración</button>
+                <button onClick={() => scrollTo('#feature-tickets')}>Tickets</button>
+                <button onClick={() => scrollTo('#feature-logs')}>Registros</button>
+              </div>
+            )}
+          </div>
         </nav>
         <div className="landing-actions">
           <button className="premium-chip" onClick={() => document.querySelector('.pricing-section')?.scrollIntoView({ behavior: 'smooth' })}><Sparkles size={14} /> Premium</button>
@@ -381,6 +408,61 @@ function Landing({ me, onManage, onAdd, onLogin, onPlan, error, clearError }) {
           <button className="secondary-hero-button" onClick={onAdd}><DiscordIcon className="brand-discord-icon" /> Añadir a Discord</button>
           <button className="primary-hero-button" onClick={onManage}><Settings size={18} /> Administrar servidores</button>
         </div>
+      </section>
+
+      <section className="landing-status-section">
+        <div className="section-heading">
+          <p className="eyebrow">ESTADO</p>
+          <h2>Estado de Klvro en tiempo real</h2>
+          <p>Comprueba si el bot y la API están disponibles antes de administrarlo.</p>
+        </div>
+        <div className="status-grid">
+          <article className="status-card">
+            <div className={`status-icon ${liveStatus.botReady ? 'online' : 'offline'}`}><Activity size={20} /></div>
+            <div>
+              <span className="status-label">Bot de Discord</span>
+              <strong>{liveStatus.loading ? 'Comprobando…' : liveStatus.botReady ? 'Conectado' : 'No conectado'}</strong>
+            </div>
+          </article>
+          <article className="status-card">
+            <div className="status-icon"><Users size={20} /></div>
+            <div><span className="status-label">Servidores</span><strong>{liveStatus.guildCount ?? 0}</strong></div>
+          </article>
+          <article className="status-card">
+            <div className="status-icon"><Activity size={20} /></div>
+            <div><span className="status-label">Latencia</span><strong>{liveStatus.latency == null ? '—' : `${liveStatus.latency} ms`}</strong></div>
+          </article>
+        </div>
+      </section>
+
+      <section className="features-section">
+        <div className="section-heading">
+          <p className="eyebrow">FUNCIONES</p>
+          <h2>Todo lo importante desde un solo bot</h2>
+          <p>Configura cada módulo desde la dashboard y Klvro aplica los cambios directamente en Discord.</p>
+        </div>
+        <div className="feature-showcase-grid">
+          <article className="feature-showcase-card" id="feature-antiraid"><ShieldAlert size={22} /><div><h3>Anti-Raid</h3><p>Detecta entradas masivas y acciones administrativas sospechosas.</p></div></article>
+          <article className="feature-showcase-card" id="feature-admin"><UserCog size={22} /><div><h3>Administración</h3><p>Ban, kick, timeout, warns, roles, slowmode, lock y más.</p></div></article>
+          <article className="feature-showcase-card" id="feature-tickets"><Ticket size={22} /><div><h3>Tickets</h3><p>Soporte organizado con categorías, staff y registros.</p></div></article>
+          <article className="feature-showcase-card" id="feature-logs"><ClipboardList size={22} /><div><h3>Registros</h3><p>Centraliza eventos importantes del servidor en canales de logs.</p></div></article>
+          <article className="feature-showcase-card"><UserPlus size={22} /><div><h3>Bienvenidas</h3><p>Mensajes de bienvenida y configuración por servidor.</p></div></article>
+          <article className="feature-showcase-card"><Users size={22} /><div><h3>Autoroles</h3><p>Asigna automáticamente roles a miembros y bots.</p></div></article>
+        </div>
+      </section>
+
+      <section className="commands-section">
+        <div className="section-heading">
+          <p className="eyebrow">COMANDOS</p>
+          <h2>Comandos de moderación listos para usar</h2>
+          <p>Los comandos slash se registran automáticamente cuando el bot inicia.</p>
+        </div>
+        <div className="command-preview-grid">
+          {['/ban', '/kick', '/timeout', '/warn', '/warnings', '/purge', '/lock', '/unlock', '/role', '/antiraid status'].map((commandName) => (
+            <code key={commandName}>{commandName}</code>
+          ))}
+        </div>
+        <button className="secondary-button command-cta" onClick={onManage}><Command size={17} /> Abrir panel de comandos</button>
       </section>
 
       <section className="social-proof">
