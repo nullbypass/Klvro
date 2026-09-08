@@ -1,6 +1,18 @@
 # Klvro
 
-Aplicación full-stack para un bot de Discord con dashboard web, Discord OAuth2, PostgreSQL y pagos.
+Aplicación full-stack para un bot de Discord con dashboard web, Discord OAuth2, PostgreSQL externo y pagos.
+
+## Hosting gratuito
+
+La configuración de producción está preparada para:
+
+- **Render Free**: web + API + proceso del bot.
+- **Supabase Free**: PostgreSQL para sesiones, configuración, tickets, warnings, Anti-Raid y Premium.
+- **Monitor HTTP gratuito**: una petición a `/health` de forma periódica para comprobar disponibilidad.
+
+El proyecto **ya no crea una base de datos en Render**, así que el Blueprint no intenta contratar PostgreSQL de Render.
+
+> Nota: un monitor externo puede generar tráfico periódico, pero los límites y políticas del plan gratuito del proveedor siguen aplicando. Si Render suspende el servicio por cuota mensual, un ping no puede evitarlo.
 
 ## Qué incluye
 
@@ -8,61 +20,58 @@ Aplicación full-stack para un bot de Discord con dashboard web, Discord OAuth2,
 - Login real con Discord OAuth2 (`identify` + `guilds`).
 - Lista real de servidores donde el usuario puede administrar.
 - Detección de si Klvro ya está agregado al servidor.
-- Invitación real del bot con permisos necesarios.
 - Dashboard conectado a PostgreSQL.
-- Canales y roles obtenidos directamente desde Discord.
-- Módulos funcionales:
-  - Bienvenidas y DM opcional.
-  - Autoroles.
-  - Tickets con `/ticketpanel`, botón para abrir ticket y `/close`.
-  - Antispam.
-  - Bloqueo de enlaces.
-  - Logs de miembros, mensajes eliminados y canales de voz.
-  - Slash commands `/ping`, `/panel`, `/ticketpanel` y `/close`.
-  - Comandos antiguos opcionales `!ping` y `!panel` usando el prefijo configurado.
-- Premium de 30 días:
-  - Lite: US$2.99.
-  - Pro: US$5.99.
-  - PayPal con Orders v2.
-  - Tarjeta con Stripe Checkout.
-- Sesiones persistentes en PostgreSQL.
+- Bienvenidas, autoroles, tickets, antispam y bloqueo de enlaces.
+- Anti-Raid configurable:
+  - detección de entradas masivas;
+  - filtro por edad de cuenta;
+  - lockdown automático;
+  - protección de canales, roles, webhooks, bans y kicks;
+  - detección de asignación de permisos peligrosos;
+  - whitelist por usuario/rol;
+  - alerta, contención, kick o ban;
+  - historial de incidentes en PostgreSQL.
+- Administración con `/ban`, `/kick`, `/timeout`, `/untimeout`, `/warn`, `/warnings`, `/clearwarnings`, `/purge`, `/slowmode`, `/lock`, `/unlock`, `/nick`, `/role`, `/say`, `/embed`, `/userinfo`, `/serverinfo` y `/antiraid`.
+- Advertencias persistentes y timeout automático configurable.
+- Stripe Checkout y PayPal para Premium.
 - Helmet, cookies `httpOnly`, OAuth `state` y rate limiting.
-- `render.yaml` listo para Render.
 
-## Arquitectura
+## 1. Crear PostgreSQL gratis en Supabase
 
-En producción se usa **un único Web Service de Render**:
+Crea un proyecto en Supabase y guarda la contraseña de la base de datos.
 
-1. Render ejecuta `npm install && npm run build`.
-2. Vite genera `dist/`.
-3. Express sirve el frontend de `dist/` y todas las rutas `/api`, `/auth` y `/billing`.
-4. El mismo proceso mantiene la conexión Gateway del bot de Discord.
-5. PostgreSQL guarda sesiones, configuraciones, tickets y Premium.
+En el panel de Supabase busca la información de conexión de PostgreSQL y copia un **connection string**. Para una app alojada en Render conviene usar el connection pooler de Supabase cuando esté disponible.
 
-Esto evita CORS y permite usar el mismo dominio `https://klvro.site` para todo.
+Debe tener una forma parecida a:
 
-## Variables de entorno
+```text
+postgresql://USUARIO:PASSWORD@HOST:6543/postgres
+```
 
-Copia `.env.example` a `.env` para desarrollo.
+Ese valor completo se colocará en Render como:
 
-### Discord
+```text
+DATABASE_URL
+```
 
-Desde el Discord Developer Portal necesitas:
+No publiques esa URL en GitHub. Contiene la contraseña de la base de datos.
 
-- `DISCORD_CLIENT_ID`
-- `DISCORD_CLIENT_SECRET`
-- `DISCORD_BOT_TOKEN`
+Klvro crea automáticamente sus tablas al arrancar por primera vez.
 
-En **OAuth2 > Redirects** agrega exactamente:
+## 2. Discord
+
+Necesitas estas variables del Discord Developer Portal:
+
+```text
+DISCORD_CLIENT_ID
+DISCORD_CLIENT_SECRET
+DISCORD_BOT_TOKEN
+```
+
+En **OAuth2 > Redirects** agrega:
 
 ```text
 https://klvro.site/auth/discord/callback
-```
-
-Para desarrollo también puedes agregar:
-
-```text
-http://localhost:3000/auth/discord/callback
 ```
 
 En **Bot > Privileged Gateway Intents** activa:
@@ -70,127 +79,137 @@ En **Bot > Privileged Gateway Intents** activa:
 - Server Members Intent
 - Message Content Intent
 
-Klvro usa `GuildVoiceStates`, que no es privilegiado.
+Para Anti-Raid, Klvro necesita acceso al Audit Log y permisos suficientes para gestionar/moderar las acciones que quieras proteger. El rol del bot debe estar por encima de los roles que necesite retirar.
 
-`REGISTER_COMMANDS=true` registra los slash commands al iniciar el servicio.
+## 3. Render Free
 
-## Stripe para tarjetas
+El `render.yaml` está configurado con:
 
-1. Crea una cuenta de Stripe.
-2. Copia tu Secret Key a `STRIPE_SECRET_KEY`.
-3. Después de tener Klvro desplegado, crea un webhook apuntando a:
+```text
+plan: free
+region: virginia
+build: npm install && npm run build
+start: npm start
+health: /health
+```
+
+### Blueprint
+
+1. En Render abre **New > Blueprint**.
+2. Selecciona el repositorio de Klvro y la rama `main`.
+3. Render detectará `render.yaml`.
+4. En `DATABASE_URL`, pega el connection string de Supabase.
+5. Completa Discord y, si vas a activar Premium, Stripe/PayPal.
+6. Aplica el Blueprint.
+
+Variables que te solicitará:
+
+```text
+DATABASE_URL
+DISCORD_CLIENT_ID
+DISCORD_CLIENT_SECRET
+DISCORD_BOT_TOKEN
+STRIPE_SECRET_KEY
+STRIPE_WEBHOOK_SECRET
+PAYPAL_CLIENT_ID
+PAYPAL_CLIENT_SECRET
+```
+
+`SESSION_SECRET` es generado automáticamente por Render.
+
+## 4. Monitor de disponibilidad
+
+Klvro ya expone:
+
+```text
+GET /health
+```
+
+Cuando Render te entregue una URL, configura tu monitor HTTP para consultar:
+
+```text
+https://TU-SERVICIO.onrender.com/health
+```
+
+o, después de configurar el dominio:
+
+```text
+https://klvro.site/health
+```
+
+Un intervalo de aproximadamente 5 minutos es suficiente para monitorización normal. El endpoint devuelve JSON y no toca la base de datos, así que es muy ligero.
+
+## 5. Dominio `klvro.site`
+
+El Blueprint incluye `klvro.site` como dominio personalizado. Render mostrará los registros DNS necesarios. Una vez verificado, HTTPS se gestiona desde Render.
+
+Antes de probar OAuth verifica:
+
+```text
+https://klvro.site/health
+```
+
+Debe responder con `ok: true`.
+
+## Stripe
+
+Después del despliegue crea un webhook en:
 
 ```text
 https://klvro.site/api/webhooks/stripe
 ```
 
-Escucha al menos:
+Eventos:
 
 ```text
 checkout.session.completed
 checkout.session.async_payment_succeeded
 ```
 
-4. Copia el signing secret del webhook a `STRIPE_WEBHOOK_SECRET`.
-
-No necesitas crear productos o precios manualmente: el backend crea el precio del pago al abrir Checkout.
+Coloca el signing secret en `STRIPE_WEBHOOK_SECRET`.
 
 ## PayPal
 
-1. En PayPal Developer crea una REST App.
-2. Coloca Client ID y Secret en:
+Configura:
 
 ```text
 PAYPAL_CLIENT_ID
 PAYPAL_CLIENT_SECRET
-```
-
-Mientras pruebas usa:
-
-```text
 PAYPAL_MODE=sandbox
 ```
 
-Cuando ya hayas probado los pagos y uses credenciales Live cambia a:
-
-```text
-PAYPAL_MODE=live
-```
-
-Klvro crea la orden en el servidor, manda al usuario a PayPal y captura el pago cuando PayPal regresa al sitio.
-
-## Subir a Render con Blueprint
-
-El proyecto incluye `render.yaml`.
-
-1. Sube esta carpeta completa a GitHub.
-2. En Render pulsa **New > Blueprint**.
-3. Conecta el repositorio.
-4. Render detectará `render.yaml`.
-5. Durante la creación te pedirá los secretos marcados con `sync: false`:
-   - `DISCORD_CLIENT_ID`
-   - `DISCORD_CLIENT_SECRET`
-   - `DISCORD_BOT_TOKEN`
-   - `STRIPE_SECRET_KEY`
-   - `STRIPE_WEBHOOK_SECRET`
-   - `PAYPAL_CLIENT_ID`
-   - `PAYPAL_CLIENT_SECRET`
-6. Render crea el Web Service y PostgreSQL automáticamente.
-
-El Blueprint usa el plan de Web Service `0.5c-512mb` y PostgreSQL `0.1c-256mb`. Es intencional: el bot necesita un proceso que permanezca encendido. Un Web Service gratuito puede apagarse por inactividad y dejaría el bot offline.
-
-## Dominio klvro.site
-
-El Blueprint solicita el dominio `klvro.site`. Render te mostrará los registros DNS que debes configurar en el proveedor donde compraste el dominio.
-
-Después de que el dominio quede verificado, Render gestiona HTTPS automáticamente.
-
-Antes de probar OAuth confirma que esta URL abre correctamente:
-
-```text
-https://klvro.site/health
-```
-
-Debe devolver JSON con `ok: true`.
+Cuando termines las pruebas cambia `PAYPAL_MODE` a `live` y usa credenciales Live.
 
 ## Desarrollo local
 
-Necesitas Node.js 20+ y PostgreSQL.
-
-Instala dependencias:
+Para desarrollo local puedes usar PostgreSQL local o también Supabase.
 
 ```bash
 npm install
-```
-
-Terminal 1, backend:
-
-```bash
 npm run dev:server
 ```
 
-Terminal 2, frontend:
+En otra terminal:
 
 ```bash
 npm run dev
 ```
 
-Vite corre en `http://localhost:5173` y hace proxy al backend en `http://localhost:3000`.
-
-Para probar el build de producción:
+Para probar producción:
 
 ```bash
 npm run build
 NODE_ENV=production npm start
 ```
 
-Luego abre `http://localhost:3000`.
+## Seguridad
 
-## Importante antes de abrir Klvro al público
+Nunca subas a GitHub:
 
-- Cambia PayPal de Sandbox a Live solo después de probarlo.
-- Usa las claves Live correctas de Stripe.
-- Prueba pagos pequeños antes de anunciar Premium.
-- No publiques `.env`, tokens, Client Secrets ni claves privadas en GitHub.
-- Revisa la política de privacidad, términos y política de reembolsos antes de cobrar a usuarios.
-- Mantén el bot en un plan de Render que no se suspenda por inactividad.
+- `.env`
+- `DATABASE_URL`
+- token del bot
+- Discord Client Secret
+- claves privadas de Stripe o PayPal
+
+Antes de cobrar Premium publica términos, privacidad y política de reembolsos.
