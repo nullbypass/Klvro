@@ -20,10 +20,12 @@ import {
   RefreshCcw,
   Save,
   Settings,
+  ShieldAlert,
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
   Ticket,
+  UserCog,
   UserPlus,
   Users,
   X,
@@ -36,6 +38,8 @@ const nav = [
   { id: 'welcome', label: 'Bienvenidas', icon: UserPlus },
   { id: 'tickets', label: 'Tickets', icon: Ticket },
   { id: 'moderation', label: 'Moderación', icon: ShieldCheck },
+  { id: 'antiRaid', label: 'Anti-Raid', icon: ShieldAlert },
+  { id: 'administration', label: 'Administración', icon: UserCog },
   { id: 'autoroles', label: 'Autoroles', icon: Users },
   { id: 'logs', label: 'Registros', icon: ClipboardList },
   { id: 'commands', label: 'Comandos', icon: Command },
@@ -517,6 +521,8 @@ function Overview({ server, settings, status, onNavigate }) {
     { id: 'welcome', title: 'Bienvenidas', desc: 'Mensajes para nuevos miembros y mensajes privados.', icon: UserPlus },
     { id: 'tickets', title: 'Tickets', desc: 'Soporte privado con categoría y rol de staff.', icon: Ticket },
     { id: 'moderation', title: 'Moderación', desc: 'Antispam, bloqueo de enlaces y registros.', icon: ShieldCheck },
+    { id: 'antiRaid', title: 'Anti-Raid', desc: 'Protección contra raids, nukes y acciones masivas.', icon: ShieldAlert },
+    { id: 'administration', title: 'Administración', desc: 'Ban, kick, timeout, warn, purge, roles y más.', icon: UserCog },
     { id: 'autoroles', title: 'Autoroles', desc: 'Asigna un rol automáticamente al entrar.', icon: Users },
     { id: 'logs', title: 'Registros', desc: 'Centraliza eventos importantes del servidor.', icon: ClipboardList },
     { id: 'commands', title: 'Comandos', desc: 'Configura cómo se usan los comandos.', icon: Command },
@@ -555,6 +561,8 @@ function SettingsPage({ section, settings, setSettings, resources, onSave, saved
     welcome: ['Bienvenidas', 'Configura lo que ocurre cuando entra un nuevo miembro.'],
     tickets: ['Sistema de tickets', 'Ajusta el soporte privado y el registro de tickets.'],
     moderation: ['Moderación', 'Protecciones básicas para el servidor.'],
+    antiRaid: ['Anti-Raid', 'Detecta raids de entradas y acciones administrativas destructivas.'],
+    administration: ['Administración', 'Configura las herramientas de moderación del staff.'],
     autoroles: ['Autoroles', 'Entrega roles automáticamente al entrar.'],
     logs: ['Registros', 'Elige qué eventos debe registrar Klvro.'],
     commands: ['Comandos', 'Controla cómo interactúan los miembros con el bot.'],
@@ -571,6 +579,8 @@ function SettingsPage({ section, settings, setSettings, resources, onSave, saved
         {section === 'welcome' && <WelcomeForm config={config} set={set} resources={resources} />}
         {section === 'tickets' && <TicketsForm config={config} set={set} resources={resources} />}
         {section === 'moderation' && <ModerationForm config={config} set={set} resources={resources} />}
+        {section === 'antiRaid' && <AntiRaidForm config={config} set={set} resources={resources} />}
+        {section === 'administration' && <AdministrationForm config={config} set={set} resources={resources} />}
         {section === 'autoroles' && <AutorolesForm config={config} set={set} resources={resources} />}
         {section === 'logs' && <LogsForm config={config} set={set} resources={resources} />}
         {section === 'commands' && <CommandsForm config={config} set={set} />}
@@ -600,6 +610,55 @@ function ModerationForm({ config, set, resources }) {
   return <div className="form-card"><FormSection title="Protecciones" description="Controles automáticos sencillos."><ToggleRow title="Antispam" description="Detecta ráfagas de mensajes y aplica una pausa corta." checked={config.antiSpam} onChange={(value) => set('antiSpam', value)} /><ToggleRow title="Bloquear enlaces" description="Elimina enlaces enviados por usuarios sin permiso de moderación." checked={config.antiLinks} onChange={(value) => set('antiLinks', value)} /></FormSection><FormSection title="Registros" description="Canal usado por las acciones automáticas."><ChannelSelect label="Canal de moderación" value={config.logChannelId} onChange={(value) => set('logChannelId', value)} channels={textChannels(resources.channels)} /></FormSection></div>;
 }
 
+function AntiRaidForm({ config, set, resources }) {
+  const trustedIdsText = Array.isArray(config.trustedUserIds) ? config.trustedUserIds.join(', ') : String(config.trustedUserIds || '');
+  return <div className="form-card">
+    <FormSection title="Nivel de protección" description="Klvro usa ventanas de tiempo y umbrales para evitar falsos positivos.">
+      <Field label="Modo"><select value={config.mode || 'normal'} onChange={(event) => set('mode', event.target.value)}><option value="normal">Normal</option><option value="strict">Estricto</option><option value="custom">Personalizado</option></select></Field>
+      <ToggleRow title="Protección de entradas" description="Detecta muchas cuentas entrando en pocos segundos." checked={config.joinProtection} onChange={(value) => set('joinProtection', value)} />
+      <Field label="Máximo de entradas"><input type="number" min="2" max="100" value={config.joinThreshold} onChange={(event) => set('joinThreshold', Number(event.target.value))} /></Field>
+      <Field label="Ventana de entradas (segundos)"><input type="number" min="2" max="120" value={config.joinWindowSeconds} onChange={(event) => set('joinWindowSeconds', Number(event.target.value))} /></Field>
+      <Field label="Edad mínima de cuenta (horas)" hint="Durante un raid, Klvro puede actuar sobre cuentas más nuevas que este valor."><input type="number" min="0" max="8760" value={config.accountAgeHours} onChange={(event) => set('accountAgeHours', Number(event.target.value))} /></Field>
+      <Field label="Acción sobre cuentas sospechosas"><select value={config.joinAction || 'kick'} onChange={(event) => set('joinAction', event.target.value)}><option value="none">Solo alertar</option><option value="kick">Expulsar</option><option value="ban">Banear</option></select></Field>
+    </FormSection>
+    <FormSection title="Protección administrativa" description="Vigila el registro de auditoría para detectar nukes y acciones masivas.">
+      <ToggleRow title="Canales" description="Detecta creación y borrado masivo de canales." checked={config.protectChannels} onChange={(value) => set('protectChannels', value)} />
+      <ToggleRow title="Roles" description="Detecta creación y borrado masivo de roles." checked={config.protectRoles} onChange={(value) => set('protectRoles', value)} />
+      <ToggleRow title="Roles peligrosos" description="Detecta permisos administrativos añadidos o asignados." checked={config.protectDangerousRoles} onChange={(value) => set('protectDangerousRoles', value)} />
+      <ToggleRow title="Bans masivos" description="Detecta ráfagas de baneos." checked={config.protectBans} onChange={(value) => set('protectBans', value)} />
+      <ToggleRow title="Kicks masivos" description="Detecta expulsiones repetidas usando el audit log." checked={config.protectKicks} onChange={(value) => set('protectKicks', value)} />
+      <ToggleRow title="Webhooks" description="Vigila creación, edición y borrado sospechoso de webhooks." checked={config.protectWebhooks} onChange={(value) => set('protectWebhooks', value)} />
+      <Field label="Acciones para activar defensa"><input type="number" min="1" max="50" value={config.actionThreshold} onChange={(event) => set('actionThreshold', Number(event.target.value))} /></Field>
+      <Field label="Ventana administrativa (segundos)"><input type="number" min="2" max="120" value={config.actionWindowSeconds} onChange={(event) => set('actionWindowSeconds', Number(event.target.value))} /></Field>
+      <Field label="Respuesta al ejecutor"><select value={config.executorAction || 'strip'} onChange={(event) => set('executorAction', event.target.value)}><option value="alert">Solo alertar</option><option value="strip">Retirar roles peligrosos + timeout</option><option value="kick">Expulsar</option><option value="ban">Banear</option></select></Field>
+    </FormSection>
+    <FormSection title="Lockdown y confianza" description="El lockdown refuerza temporalmente las reglas cuando Klvro detecta un ataque.">
+      <ToggleRow title="Lockdown automático" description="Activa protección reforzada cuando se supera un umbral." checked={config.autoLockdown} onChange={(value) => set('autoLockdown', value)} />
+      <Field label="Duración del lockdown (minutos)"><input type="number" min="1" max="60" value={config.lockdownMinutes} onChange={(event) => set('lockdownMinutes', Number(event.target.value))} /></Field>
+      <ChannelSelect label="Canal de alertas" value={config.logChannelId} onChange={(value) => set('logChannelId', value)} channels={textChannels(resources.channels)} />
+      <RoleSelect label="Rol de confianza" value={config.trustedRoleId} onChange={(value) => set('trustedRoleId', value)} roles={resources.roles} />
+      <Field label="Usuarios de confianza" hint="IDs separados por coma. El dueño del servidor y Klvro siempre están protegidos."><textarea rows="3" value={trustedIdsText} onChange={(event) => set('trustedUserIds', event.target.value.split(/[\s,;]+/).filter(Boolean))} placeholder="123456789012345678, 987654321098765432" /></Field>
+    </FormSection>
+  </div>;
+}
+
+function AdministrationForm({ config, set, resources }) {
+  return <div className="form-card">
+    <FormSection title="Comandos del staff" description="Configura el comportamiento de las herramientas de administración.">
+      <ChannelSelect label="Canal de acciones" value={config.logChannelId} onChange={(value) => set('logChannelId', value)} channels={textChannels(resources.channels)} />
+      <ToggleRow title="Exigir motivo" description="Ban, kick, timeout, warn y untimeout requieren una razón." checked={config.requireReason} onChange={(value) => set('requireReason', value)} />
+      <Field label="Timeout predeterminado (minutos)"><input type="number" min="1" max="40320" value={config.defaultTimeoutMinutes} onChange={(event) => set('defaultTimeoutMinutes', Number(event.target.value))} /></Field>
+      <Field label="Límite de advertencias"><input type="number" min="1" max="20" value={config.warnLimit} onChange={(event) => set('warnLimit', Number(event.target.value))} /></Field>
+      <ToggleRow title="Timeout al llegar al límite" description="Aplica el timeout predeterminado al alcanzar el número de warns." checked={config.autoTimeoutOnWarnLimit} onChange={(value) => set('autoTimeoutOnWarnLimit', value)} />
+    </FormSection>
+    <FormSection title="Funciones incluidas" description="Se registran como slash commands globales cuando el bot inicia.">
+      <div className="command-list-grid">
+        <span>/ban</span><span>/kick</span><span>/timeout</span><span>/untimeout</span><span>/warn</span><span>/warnings</span><span>/clearwarnings</span><span>/purge</span><span>/slowmode</span><span>/lock</span><span>/unlock</span><span>/nick</span><span>/role</span><span>/say</span><span>/embed</span><span>/userinfo</span><span>/serverinfo</span><span>/antiraid</span>
+      </div>
+    </FormSection>
+  </div>;
+}
+
 function AutorolesForm({ config, set, resources }) {
   return <div className="form-card"><FormSection title="Rol automático" description="Klvro lo entrega cuando entra un miembro."><RoleSelect label="Rol" value={config.roleId} onChange={(value) => set('roleId', value)} roles={resources.roles} /><ToggleRow title="Aplicar también a bots" description="Entrega el mismo rol a nuevos bots." checked={config.bots} onChange={(value) => set('bots', value)} /></FormSection></div>;
 }
@@ -609,7 +668,7 @@ function LogsForm({ config, set, resources }) {
 }
 
 function CommandsForm({ config, set }) {
-  return <div className="form-card"><FormSection title="Métodos de comandos" description="Los slash commands disponibles son /ping, /panel, /ticketpanel y /close."><ToggleRow title="Slash commands" description="Comandos modernos de Discord." checked={config.slash} onChange={(value) => set('slash', value)} /><ToggleRow title="Comandos con prefijo" description="Habilita ping y panel usando el prefijo configurado." checked={config.legacyPrefix} onChange={(value) => set('legacyPrefix', value)} /></FormSection></div>;
+  return <div className="form-card"><FormSection title="Métodos de comandos" description="Incluye comandos generales, tickets, Anti-Raid y herramientas completas de administración."><ToggleRow title="Slash commands" description="Comandos modernos de Discord." checked={config.slash} onChange={(value) => set('slash', value)} /><ToggleRow title="Comandos con prefijo" description="Habilita ping y panel usando el prefijo configurado." checked={config.legacyPrefix} onChange={(value) => set('legacyPrefix', value)} /></FormSection></div>;
 }
 
 function ChannelSelect({ label, value, onChange, channels }) {
