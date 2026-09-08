@@ -8,8 +8,8 @@
   },
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "node scripts/ui-patch.mjs && node scripts/ticket-feature-patch.mjs && node scripts/ticket-ui-hotfix.mjs && node scripts/mobile-session-fix.mjs && vite build",
-    "start": "node scripts/ticket-feature-patch.mjs && node scripts/mobile-session-fix.mjs && node server/index.mjs",
+    "build": "node scripts/ui-patch.mjs && node scripts/ticket-feature-patch.mjs && node scripts/ticket-ui-hotfix.mjs && node scripts/mobile-session-fix.mjs && node scripts/domain-docs-language.mjs && vite build",
+    "start": "node scripts/ticket-feature-patch.mjs && node scripts/mobile-session-fix.mjs && node scripts/domain-docs-language.mjs && node server/index.mjs",
     "register-commands": "node server/register-commands.mjs",
     "dev:server": "node --watch server/index.mjs"
   },
