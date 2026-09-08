@@ -272,7 +272,45 @@ app.get('/auth/discord/callback', async (req, res, next) => {
     };
 
     await upsertUser(user);
-    req.session.save(() => res.redirect('/app'));
+    req.session.save(() => {
+      // El login ocurre en un popup. La sesión queda guardada para la ventana principal,
+      // avisamos al opener y cerramos el popup en vez de cargar el dashboard dentro de él.
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader(
+        'Content-Security-Policy',
+        "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'"
+      );
+      res.type('html').send(`<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Klvro</title>
+  <style>
+    html,body{height:100%;margin:0;background:#11131b;color:#eef0f6;font-family:Arial,sans-serif}
+    body{display:grid;place-items:center}
+    .box{text-align:center;padding:24px}.dot{width:34px;height:34px;border:3px solid #33384a;border-top-color:#fff;border-radius:50%;margin:0 auto 14px;animation:s .7s linear infinite}
+    p{margin:0;color:#aeb4c6;font-size:14px}@keyframes s{to{transform:rotate(360deg)}}
+  </style>
+</head>
+<body>
+  <div class="box"><div class="dot"></div><p>Volviendo a Klvro…</p></div>
+  <script>
+    (function () {
+      try {
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage({ type: 'klvro-auth-success' }, window.location.origin);
+        }
+      } catch (_) {}
+      setTimeout(function () { try { window.close(); } catch (_) {} }, 80);
+      setTimeout(function () {
+        if (!window.closed) window.location.replace('/app');
+      }, 3000);
+    })();
+  </script>
+</body>
+</html>`);
+    });
   } catch (error) {
     next(error);
   }
