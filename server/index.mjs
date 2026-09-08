@@ -408,6 +408,15 @@ function sanitizeSettings(input) {
     const text = String(value ?? '');
     return /^\d{16,22}$/.test(text) ? text : '';
   };
+  const number = (value, fallback, min, max) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.max(min, Math.min(max, Math.round(parsed)));
+  };
+  const ids = (value) => {
+    const list = Array.isArray(value) ? value : String(value ?? '').split(/[\s,;]+/);
+    return [...new Set(list.map((item) => String(item).trim()).filter((item) => /^\d{16,22}$/.test(item)))].slice(0, 50);
+  };
 
   return {
     general: {
@@ -436,6 +445,37 @@ function sanitizeSettings(input) {
       antiLinks: bool(body.moderation?.antiLinks),
       logChannelId: id(body.moderation?.logChannelId),
       muteRoleId: id(body.moderation?.muteRoleId),
+    },
+    antiRaid: {
+      enabled: bool(body.antiRaid?.enabled),
+      mode: ['normal', 'strict', 'custom'].includes(body.antiRaid?.mode) ? body.antiRaid.mode : 'normal',
+      joinProtection: bool(body.antiRaid?.joinProtection),
+      joinThreshold: number(body.antiRaid?.joinThreshold, 8, 2, 100),
+      joinWindowSeconds: number(body.antiRaid?.joinWindowSeconds, 10, 2, 120),
+      accountAgeHours: number(body.antiRaid?.accountAgeHours, 24, 0, 8760),
+      joinAction: ['none', 'kick', 'ban'].includes(body.antiRaid?.joinAction) ? body.antiRaid.joinAction : 'kick',
+      autoLockdown: bool(body.antiRaid?.autoLockdown),
+      lockdownMinutes: number(body.antiRaid?.lockdownMinutes, 5, 1, 60),
+      protectChannels: bool(body.antiRaid?.protectChannels),
+      protectRoles: bool(body.antiRaid?.protectRoles),
+      protectBans: bool(body.antiRaid?.protectBans),
+      protectKicks: bool(body.antiRaid?.protectKicks),
+      protectWebhooks: bool(body.antiRaid?.protectWebhooks),
+      protectDangerousRoles: bool(body.antiRaid?.protectDangerousRoles),
+      actionThreshold: number(body.antiRaid?.actionThreshold, 3, 1, 50),
+      actionWindowSeconds: number(body.antiRaid?.actionWindowSeconds, 10, 2, 120),
+      executorAction: ['alert', 'strip', 'kick', 'ban'].includes(body.antiRaid?.executorAction) ? body.antiRaid.executorAction : 'strip',
+      logChannelId: id(body.antiRaid?.logChannelId),
+      trustedRoleId: id(body.antiRaid?.trustedRoleId),
+      trustedUserIds: ids(body.antiRaid?.trustedUserIds),
+    },
+    administration: {
+      enabled: bool(body.administration?.enabled),
+      logChannelId: id(body.administration?.logChannelId),
+      defaultTimeoutMinutes: number(body.administration?.defaultTimeoutMinutes, 10, 1, 40320),
+      warnLimit: number(body.administration?.warnLimit, 3, 1, 20),
+      autoTimeoutOnWarnLimit: bool(body.administration?.autoTimeoutOnWarnLimit),
+      requireReason: bool(body.administration?.requireReason),
     },
     autoroles: {
       enabled: bool(body.autoroles?.enabled),

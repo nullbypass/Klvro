@@ -20,6 +20,8 @@ import {
   findTicketByChannel,
   getGuildSettings,
 } from './db.mjs';
+import { administrationCommandBuilders, handleAdministrationCommand } from './administration.mjs';
+import { antiRaidCommandBuilder, handleAntiRaidCommand, setupAntiRaid } from './anti-raid.mjs';
 
 export const bot = new Client({
   intents: [
@@ -65,6 +67,11 @@ export function buildInviteUrl(guildId) {
     PermissionFlagsBits.ManageChannels,
     PermissionFlagsBits.ManageRoles,
     PermissionFlagsBits.ModerateMembers,
+    PermissionFlagsBits.KickMembers,
+    PermissionFlagsBits.BanMembers,
+    PermissionFlagsBits.ViewAuditLog,
+    PermissionFlagsBits.ManageWebhooks,
+    PermissionFlagsBits.ManageNicknames,
   ]).bitfield.toString();
 
   const params = new URLSearchParams({
@@ -112,6 +119,8 @@ export async function startBot() {
 }
 
 function wireEvents() {
+  setupAntiRaid(bot);
+
   bot.once('ready', async () => {
     bot.user.setActivity('Klvro');
     console.log(`[Klvro] Bot conectado como ${bot.user.tag} en ${bot.guilds.cache.size} servidores.`);
@@ -329,6 +338,9 @@ async function handleSlashCommand(interaction) {
     return;
   }
 
+  if (await handleAntiRaidCommand(interaction)) return;
+  if (await handleAdministrationCommand(interaction)) return;
+
   if (interaction.commandName === 'ticketpanel') {
     if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
       await interaction.reply({ content: 'Necesitas el permiso **Administrar servidor**.', ephemeral: true });
@@ -518,6 +530,8 @@ export async function registerCommands() {
     new SlashCommandBuilder().setName('panel').setDescription('Muestra el enlace a la dashboard de Klvro.'),
     new SlashCommandBuilder().setName('ticketpanel').setDescription('Publica el panel para abrir tickets.'),
     new SlashCommandBuilder().setName('close').setDescription('Cierra el ticket actual.'),
+    antiRaidCommandBuilder(),
+    ...administrationCommandBuilders(),
   ].map((command) => command.toJSON());
 
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_BOT_TOKEN);

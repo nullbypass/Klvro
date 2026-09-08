@@ -35,6 +35,37 @@ const DEFAULT_SETTINGS = {
     logChannelId: '',
     muteRoleId: '',
   },
+  antiRaid: {
+    enabled: false,
+    mode: 'normal',
+    joinProtection: true,
+    joinThreshold: 8,
+    joinWindowSeconds: 10,
+    accountAgeHours: 24,
+    joinAction: 'kick',
+    autoLockdown: true,
+    lockdownMinutes: 5,
+    protectChannels: true,
+    protectRoles: true,
+    protectBans: true,
+    protectKicks: true,
+    protectWebhooks: true,
+    protectDangerousRoles: true,
+    actionThreshold: 3,
+    actionWindowSeconds: 10,
+    executorAction: 'strip',
+    logChannelId: '',
+    trustedRoleId: '',
+    trustedUserIds: [],
+  },
+  administration: {
+    enabled: true,
+    logChannelId: '',
+    defaultTimeoutMinutes: 10,
+    warnLimit: 3,
+    autoTimeoutOnWarnLimit: true,
+    requireReason: true,
+  },
   autoroles: {
     enabled: false,
     roleId: '',
@@ -92,6 +123,31 @@ export async function initDb() {
 
     CREATE INDEX IF NOT EXISTS tickets_guild_opener_idx
       ON tickets (guild_id, opener_id, status);
+
+    CREATE TABLE IF NOT EXISTS moderation_warnings (
+      id BIGSERIAL PRIMARY KEY,
+      guild_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      moderator_id TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS moderation_warnings_lookup_idx
+      ON moderation_warnings (guild_id, user_id, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS anti_raid_incidents (
+      id BIGSERIAL PRIMARY KEY,
+      guild_id TEXT NOT NULL,
+      executor_id TEXT,
+      incident_type TEXT NOT NULL,
+      action_taken TEXT,
+      details JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS anti_raid_incidents_guild_idx
+      ON anti_raid_incidents (guild_id, created_at DESC);
 
     CREATE TABLE IF NOT EXISTS premium_access (
       user_id TEXT PRIMARY KEY,
@@ -192,6 +248,55 @@ export async function closeTicketRecord(channelId) {
     `UPDATE tickets SET status = 'closed', closed_at = NOW()
      WHERE channel_id = $1 AND status = 'open'`,
     [channelId]
+  );
+}
+
+export async function addWarning({ guildId, userId, moderatorId, reason }) {
+  const { rows } = await pool.query(
+    `INSERT INTO moderation_warnings (guild_id, user_id, moderator_id, reason)
+     VALUES ($1, $2, $3, $4)
+     RETURNING *`,
+    [guildId, userId, moderatorId, reason]
+  );
+  return rows[0];
+}
+
+export async function listWarnings(guildId, userId, limit = 10) {
+  const safeLimit = Math.max(1, Math.min(25, Number(limit) || 10));
+  const { rows } = await pool.query(
+    `SELECT id, moderator_id, reason, created_at
+     FROM moderation_warnings
+     WHERE guild_id = $1 AND user_id = $2
+     ORDER BY created_at DESC
+     LIMIT $3`,
+    [guildId, userId, safeLimit]
+  );
+  return rows;
+}
+
+export async function countWarnings(guildId, userId) {
+  const { rows } = await pool.query(
+    `SELECT COUNT(*)::int AS count
+     FROM moderation_warnings
+     WHERE guild_id = $1 AND user_id = $2`,
+    [guildId, userId]
+  );
+  return rows[0]?.count ?? 0;
+}
+
+export async function clearWarnings(guildId, userId) {
+  const result = await pool.query(
+    `DELETE FROM moderation_warnings WHERE guild_id = $1 AND user_id = $2`,
+    [guildId, userId]
+  );
+  return result.rowCount;
+}
+
+export async function logAntiRaidIncident({ guildId, executorId = null, type, actionTaken = null, details = {} }) {
+  await pool.query(
+    `INSERT INTO anti_raid_incidents (guild_id, executor_id, incident_type, action_taken, details)
+     VALUES ($1, $2, $3, $4, $5::jsonb)`,
+    [guildId, executorId, type, actionTaken, JSON.stringify(details)]
   );
 }
 
