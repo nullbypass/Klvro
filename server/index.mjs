@@ -72,6 +72,8 @@ app.post('/api/webhooks/stripe', stripeWebhook, async (req, res) => {
 
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
+  // Permite conservar window.opener durante OAuth de Discord para cerrar el popup al volver.
+  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
